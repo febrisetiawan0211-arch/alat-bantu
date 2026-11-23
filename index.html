@@ -116,6 +116,8 @@
   .status.gagal { color: var(--merah); }
 
   .label-mode { font-size: 14px; color: var(--redup); }
+  .pengaturan { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .pengaturan input[type=range] { width: 220px; vertical-align: middle; }
 
   table.hasil-tabel { width: 100%; border-collapse: collapse; font-size: 14px; }
   table.hasil-tabel th, table.hasil-tabel td {
@@ -226,9 +228,14 @@
 
       <!-- Hasil mode TABEL -->
       <div class="kartu" id="kartuTabel" style="display:none">
-        <div class="bar" style="margin-bottom:12px; justify-content:space-between">
+        <div class="pengaturan">
           <label class="label-mode">
             <input type="checkbox" id="cekHeader" checked> Baris pertama sebagai judul kolom
+          </label>
+          <label class="label-mode">
+            Jarak pemisah kolom:
+            <input type="range" id="rentangKolom" min="0.5" max="3" step="0.1" value="1">
+            <span id="nilaiRentang">1.0</span>
           </label>
         </div>
         <div style="overflow-x:auto">
@@ -416,12 +423,15 @@ const theadTabel = document.getElementById("theadTabel");
 const tbodyTabel = document.getElementById("tbodyTabel");
 const kosongTabel = document.getElementById("kosongTabel");
 const cekHeader = document.getElementById("cekHeader");
+const rentangKolom = document.getElementById("rentangKolom");
+const nilaiRentang = document.getElementById("nilaiRentang");
 const infoTabel = document.getElementById("infoTabel");
 
-let worker = null;     // worker Tesseract, dibuat sekali lalu dipakai ulang
-let adaHasil = false;  // sudah ada hasil OCR?
-let tabelData = [];    // array of array (sel berupa string), hasil yang bisa diedit
-let kolomTabel = 0;    // jumlah kolom tabel
+let worker = null;      // worker Tesseract, dibuat sekali lalu dipakai ulang
+let adaHasil = false;   // sudah ada hasil OCR?
+let tabelData = [];     // array of array (sel berupa string), hasil yang bisa diedit
+let kolomTabel = 0;     // jumlah kolom tabel
+let kataTerakhir = [];  // kata beserta posisinya dari OCR, dipakai untuk hitung ulang kolom
 
 function setStatus(pesan, jenis = "") {
   statusOCR.className = "status " + jenis;
@@ -437,11 +447,46 @@ async function ambilWorker() {
         }
       }
     });
+    // PSM 6 = satu blok teks seragam (cocok untuk tabel); spasi antarkata dipertahankan
+    await worker.setParameters({
+      tessedit_pageseg_mode: "6",
+      preserve_interword_spaces: "1"
+    });
   }
   return worker;
 }
 
-// Ambil daftar kata beserta posisinya (kotak pembatas)
+/* Perbesar gambar dan naikkan kontras (hitam-putih) agar OCR lebih akurat */
+async function siapkanGambar(file) {
+  const bmp = await createImageBitmap(file);
+  const skala = Math.min(4, Math.max(2, 2200 / bmp.width));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * skala);
+  c.height = Math.round(bmp.height * skala);
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(bmp, 0, 0, c.width, c.height);
+
+  const img = ctx.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  let min = 255, max = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    d[i] = d[i + 1] = d[i + 2] = g;
+    if (g < min) min = g;
+    if (g > max) max = g;
+  }
+  const rentang = Math.max(1, max - min);
+  for (let i = 0; i < d.length; i += 4) {
+    const v = ((d[i] - min) / rentang) * 255;
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
 function ambilKata(data) {
   if (data.words && data.words.length) return data.words;
   const out = [];
@@ -462,20 +507,22 @@ function median(arr) {
   return s.length % 2 ? s[tengah] : (s[tengah - 1] + s[tengah]) / 2;
 }
 
-/* Kelompokkan kata menjadi baris, lalu pecah baris menjadi sel
-   berdasarkan jarak antarkata (jarak besar = pemisah kolom) */
-function buatTabel(kata) {
-  const kataValid = kata.filter(w => w.text && w.text.trim() && w.bbox);
-  if (!kataValid.length) return [];
+/* Kelompokkan kata menjadi baris, lalu pecah tiap baris menjadi sel.
+   Dua kata dianggap satu sel jika jaraknya <= faktor x tinggi huruf.
+   Faktor besar = kolom lebih sedikit; faktor kecil = kolom lebih banyak. */
+function buatTabel(kata, faktor) {
+  const valid = kata.filter(w => w.text && w.text.trim() && w.bbox);
+  if (!valid.length) return [];
 
-  const tinggi = median(kataValid.map(w => w.bbox.y1 - w.bbox.y0)) || 10;
+  const tinggi = median(valid.map(w => w.bbox.y1 - w.bbox.y0)) || 10;
   const yTengah = w => (w.bbox.y0 + w.bbox.y1) / 2;
 
-  const urut = [...kataValid].sort((a, b) => yTengah(a) - yTengah(b));
+  // Kelompokkan per baris berdasarkan posisi vertikal
+  const urut = [...valid].sort((a, b) => yTengah(a) - yTengah(b));
   const kelompok = [];
   for (const w of urut) {
     const terakhir = kelompok[kelompok.length - 1];
-    if (terakhir && Math.abs(yTengah(w) - terakhir.y) < tinggi * 0.6) {
+    if (terakhir && Math.abs(yTengah(w) - terakhir.y) < tinggi * 0.5) {
       terakhir.items.push(w);
       terakhir.y = terakhir.items.reduce((s, k) => s + yTengah(k), 0) / terakhir.items.length;
     } else {
@@ -483,12 +530,14 @@ function buatTabel(kata) {
     }
   }
 
+  const ambang = tinggi * faktor;
+
   return kelompok.map(b => {
     const items = b.items.sort((a, c) => a.bbox.x0 - c.bbox.x0);
     const sel = [];
     let cur = null;
     for (const w of items) {
-      if (cur && w.bbox.x0 - cur.x1 <= tinggi * 0.9) {
+      if (cur && w.bbox.x0 - cur.x1 <= ambang) {
         cur.teks.push(w.text.trim());
         cur.x1 = w.bbox.x1;
       } else {
@@ -528,7 +577,6 @@ function tampilkanOCR() {
   else areaTeks.value = teksDariTabel();
 }
 
-// Teks biasa dibentuk dari baris-baris tabel agar mode teks tetap konsisten
 function teksDariTabel() {
   return tabelData.map(r => r.join("  ")).join("\n");
 }
@@ -538,12 +586,10 @@ function renderTabel() {
   tabelData = samakanKolom(tabelData);
   const adaJudul = cekHeader.checked && tabelData.length > 0;
 
-  // Header
   let htmlHead = "<tr><th class='nomor'>No</th>";
   for (let c = 0; c < kolomTabel; c++) {
     if (adaJudul) {
-      const nilai = tabelData[0][c];
-      htmlHead += `<th><input type="text" value="${escapeHtml(nilai)}" data-r="0" data-c="${c}"></th>`;
+      htmlHead += `<th><input type="text" value="${escapeHtml(tabelData[0][c])}" data-r="0" data-c="${c}"></th>`;
     } else {
       htmlHead += `<th>Kolom ${c + 1}</th>`;
     }
@@ -551,7 +597,6 @@ function renderTabel() {
   htmlHead += "<th style='width:36px'></th></tr>";
   theadTabel.innerHTML = htmlHead;
 
-  // Isi
   const mulai = adaJudul ? 1 : 0;
   let htmlBody = "";
   for (let r = mulai; r < tabelData.length; r++) {
@@ -569,21 +614,17 @@ function renderTabel() {
 }
 
 function bentukTSV() {
-  const adaJudul = cekHeader.checked;
   return tabelData.map(r => r.map(s => String(s).replace(/[\t\n]/g, " ")).join("\t")).join("\n");
 }
 
 // Edit sel tabel langsung di data, tanpa render ulang agar fokus tidak hilang
-tbodyTabel.addEventListener("input", e => {
+function catatEdit(e) {
   const el = e.target;
   if (el.dataset.r === undefined) return;
   tabelData[Number(el.dataset.r)][Number(el.dataset.c)] = el.value;
-});
-theadTabel.addEventListener("input", e => {
-  const el = e.target;
-  if (el.dataset.r === undefined) return;
-  tabelData[Number(el.dataset.r)][Number(el.dataset.c)] = el.value;
-});
+}
+tbodyTabel.addEventListener("input", catatEdit);
+theadTabel.addEventListener("input", catatEdit);
 
 tbodyTabel.addEventListener("click", e => {
   const idx = e.target.dataset.hapus;
@@ -594,6 +635,17 @@ tbodyTabel.addEventListener("click", e => {
 });
 
 cekHeader.addEventListener("change", renderTabel);
+
+// Ubah jarak pemisah kolom: hitung ulang dari data OCR (edit manual akan hilang)
+rentangKolom.addEventListener("input", () => {
+  nilaiRentang.textContent = Number(rentangKolom.value).toFixed(1);
+});
+rentangKolom.addEventListener("change", () => {
+  if (!kataTerakhir.length) return;
+  tabelData = buatTabel(kataTerakhir, Number(rentangKolom.value));
+  tampilkanOCR();
+  setStatus("Kolom dihitung ulang dengan jarak " + Number(rentangKolom.value).toFixed(1) + ".");
+});
 
 document.getElementById("btnTambahBaris").addEventListener("click", () => {
   if (!adaHasil) { adaHasil = true; kartuTabel.style.display = "block"; }
@@ -610,7 +662,6 @@ document.getElementById("btnTambahKolom").addEventListener("click", () => {
 
 modeOCR.addEventListener("change", tampilkanOCR);
 
-// Edit teks langsung, lalu simpan ke data agar konsisten saat disalin
 areaTeks.addEventListener("input", () => {
   tabelData = areaTeks.value.split("\n").map(baris => [baris]);
 });
@@ -626,7 +677,6 @@ document.getElementById("btnSalinTeks").addEventListener("click", async () => {
 
 document.getElementById("btnSalinTabel").addEventListener("click", async () => {
   if (!tabelData.length) { setStatus("Belum ada data untuk disalin.", "gagal"); return; }
-  const judul = cekHeader.checked ? "" : "";
   try {
     await salinTeks(bentukTSV());
     setStatus("Tabel disalin. Tempel di Excel dengan Ctrl+V.", "sukses");
@@ -636,19 +686,22 @@ document.getElementById("btnSalinTabel").addEventListener("click", async () => {
 });
 
 async function prosesGambar(file) {
-  setStatus("Membaca gambar... (pertama kali bisa lebih lama karena mengunduh data bahasa)");
+  setStatus("Menyiapkan gambar...");
   try {
+    const canvas = await siapkanGambar(file);
     const w = await ambilWorker();
-    const { data } = await w.recognize(file);
-    const kata = ambilKata(data);
-    const baris = buatTabel(kata);
+    setStatus("Membaca gambar... 0%");
+    const { data } = await w.recognize(canvas);
+
+    kataTerakhir = ambilKata(data);
+    const baris = buatTabel(kataTerakhir, Number(rentangKolom.value));
 
     if (!baris.length && !(data.text || "").trim()) {
       setStatus("Tidak ada teks yang terbaca. Coba gambar yang lebih jelas.", "gagal");
       return;
     }
 
-    // Jika kata tidak punya posisi, gunakan teks mentah per baris
+    // Jika kata tidak punya posisi, pakai teks mentah per baris
     tabelData = baris.length ? baris : (data.text || "").split("\n").filter(s => s.trim()).map(s => [s.trim()]);
     adaHasil = true;
     tampilkanOCR();
