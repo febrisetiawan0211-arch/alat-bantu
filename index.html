@@ -209,8 +209,8 @@
           <input type="file" id="fileGambar" accept="image/*">
           <span class="label-mode">Mode:</span>
           <select id="modeOCR">
-            <option value="sbpep">PPh 21 Final - SBPEP (NPWP & Bruto)</option>
-            <option value="transfer">Daftar Transfer (Nama, NPWP, Nilai)</option>
+            <option value="sbpep">SBPEP Pemeriksa</option>
+            <option value="transfer">Uang Makan PPPK</option>
             <option value="otomatis">Otomatis</option>
             <option value="teks">Teks</option>
             <option value="tabel">Tabel</option>
@@ -228,7 +228,7 @@
         </div>
       </div>
 
-      <!-- Hasil mode TABEL, PPh 21 Final, dan Daftar Transfer -->
+      <!-- Hasil mode TABEL, SBPEP Pemeriksa, dan Uang Makan PPPK -->
       <div class="kartu" id="kartuTabel" style="display:none">
         <div class="pengaturan">
           <label class="label-mode">
@@ -586,7 +586,7 @@ function buatTabel(kata, faktor) {
 }
 
 /* =========================================================
-   MODE PPh 21 FINAL - SBPEP
+   MODE SBPEP PEMERIKSA
    - Orang dikenali dari baris yang memuat 2 nilai rupiah atau lebih
    - Bruto (Opsi A): nilai terbesar di baris tersebut
    - Nama: teks paling dekat di sekitar baris tersebut
@@ -674,13 +674,13 @@ function parseSBPEP(data) {
 }
 
 /* =========================================================
-   MODE DAFTAR TRANSFER (Nama, NPWP, Nilai)
+   MODE UANG MAKAN PPPK (Nama, NPWP, Nilai)
    - NPWP (15-16 digit) sebagai jangkar; nomor rekening (10 digit) diabaikan
    - Nama: baris huruf di atas NPWP, tidak melewati NPWP orang lain
    - Nilai: format 770.000,00 -> 770000 (bagian desimal dibuang)
    - Nilai dipasangkan ke NPWP terdekat, satu nilai hanya sekali
    ========================================================= */
-function parseDaftarTransfer(data) {
+function parseUangMakanPPPK(data) {
   const garis = (data.lines && data.lines.length)
     ? data.lines.map(l => l.text.trim())
     : (data.text || "").split("\n").map(s => s.trim());
@@ -750,7 +750,7 @@ function parseDaftarTransfer(data) {
 }
 
 const HEADER_SBPEP = ["Nama Lengkap", "NPWP", "Jumlah Bruto (Rp)"];
-const HEADER_TRANSFER = ["Nama Penerima", "NPWP", "Nilai (Rp)"];
+const HEADER_UANG_MAKAN = ["Nama Penerima", "NPWP", "Nilai (Rp)"];
 
 // Mode otomatis: jika mayoritas baris punya 2 kolom atau lebih, anggap tabel
 function apakahTabel(baris) {
@@ -787,8 +787,8 @@ function tampilkanDariData() {
   } else if (mode === "transfer") {
     bentuk = "transfer";
     cekHeader.checked = true;
-    const rows = terakhirData ? parseDaftarTransfer(terakhirData) : [];
-    tabelData = [HEADER_TRANSFER, ...rows];
+    const rows = terakhirData ? parseUangMakanPPPK(terakhirData) : [];
+    tabelData = [HEADER_UANG_MAKAN, ...rows];
   } else {
     const dariKata = buatTabel(kataTerakhir, Number(rentangKolom.value));
     tabelData = dariKata.length
