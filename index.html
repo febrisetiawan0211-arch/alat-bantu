@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alat Bantu</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<style>
+  :root {
+    --aksen: #0f766e;
+    --aksen-gelap: #0b5a54;
+    --aksen-muda: #ecfdf5;
+    --latar: #f8fafc;
+    --sidebar: #ffffff;
+    --teks: #1e293b;
+    --redup: #64748b;
+    --garis: #e2e8f0;
+    --merah: #b91c1c;
+    --merah-muda: #fef2f2;
+    --lebar-sidebar: 230px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", system-ui, Arial, sans-serif;
+    margin: 0; background: var(--latar); color: var(--teks); line-height: 1.5;
+  }
+
+  /* ---------- Layout utama ---------- */
+  .wadah { display: flex; min-height: 100vh; }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    width: var(--lebar-sidebar); background: var(--sidebar);
+    border-right: 1px solid var(--garis); padding: 20px 14px;
+    position: sticky; top: 0; height: 100vh; flex-shrink: 0;
+    transition: transform .2s;
+  }
+  .sidebar h1 { margin: 0 0 20px 8px; font-size: 20px; color: var(--aksen-gelap); }
+  .menu-btn {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    background: none; border: none; text-align: left; padding: 11px 12px;
+    border-radius: 10px; cursor: pointer; font-size: 14px; color: var(--teks);
+    margin-bottom: 4px; transition: background .15s;
+  }
+  .menu-btn:hover { background: var(--latar); }
+  .menu-btn.aktif { background: var(--aksen); color: #fff; }
+  .menu-btn .ikon { width: 22px; text-align: center; font-size: 16px; }
+
+  .tombol-menu {
+    display: none; position: fixed; top: 12px; left: 12px; z-index: 20;
+    background: var(--aksen); color: #fff; border: none; border-radius: 8px;
+    padding: 8px 12px; font-size: 18px; cursor: pointer;
+  }
+
+  /* ---------- Area konten ---------- */
+  .konten { flex: 1; min-width: 0; padding: 28px 32px 40px; }
+  .tab { display: none; }
+  .tab.aktif { display: block; }
+  .judul-tab h2 { margin: 0 0 4px; font-size: 22px; }
+  .judul-tab p { margin: 0 0 20px; color: var(--redup); font-size: 14px; }
+
+  .kartu {
+    background: #fff; border-radius: 16px; padding: 24px; margin-bottom: 18px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 18px rgba(0,0,0,.05);
+  }
+  .kartu h3 { margin: 0 0 12px; font-size: 16px; }
+
+  input[type=text] {
+    padding: 12px 14px; font-size: 15px; border: 1px solid var(--garis);
+    border-radius: 10px; outline: none; transition: border-color .15s, box-shadow .15s;
+  }
+  input[type=text]:focus { border-color: var(--aksen); box-shadow: 0 0 0 3px rgba(15,118,110,.15); }
+
+  .bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .bar.kanan { justify-content: space-between; }
+  .lebar { flex: 1; min-width: 200px; }
+
+  button.utama {
+    background: var(--aksen); color: #fff; border: none; padding: 11px 20px;
+    border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600;
+    transition: background .15s;
+  }
+  button.utama:hover { background: var(--aksen-gelap); }
+  button.sekunder {
+    background: #fff; color: var(--teks); border: 1px solid var(--garis);
+    padding: 10px 16px; border-radius: 10px; cursor: pointer; font-size: 14px;
+    transition: background .15s;
+  }
+  button.sekunder:hover { background: var(--latar); }
+  button.hapus {
+    background: none; border: none; color: var(--redup); cursor: pointer;
+    font-size: 16px; padding: 4px 8px; border-radius: 6px;
+  }
+  button.hapus:hover { background: var(--merah-muda); color: var(--merah); }
+
+  .hasil {
+    margin-top: 18px; padding: 16px 18px; min-height: 28px; font-size: 18px;
+    background: var(--aksen-muda); border-left: 4px solid var(--aksen); border-radius: 10px;
+  }
+  .hasil.kosong { background: var(--latar); border-left-color: var(--garis); color: var(--redup); font-size: 15px; }
+  .hasil small { display: block; color: var(--redup); font-size: 13px; margin-top: 4px; }
+
+  .zona {
+    border: 2px dashed #cbd5e1; border-radius: 16px; padding: 36px 20px; text-align: center;
+    color: var(--redup); background: #fcfdfe; cursor: pointer; transition: all .15s; margin-bottom: 14px;
+  }
+  .zona:hover, .zona:focus { border-color: var(--aksen); background: var(--aksen-muda); color: var(--teks); outline: none; }
+  .zona .ikon-besar { font-size: 34px; display: block; margin-bottom: 6px; }
+  .zona b { color: var(--aksen-gelap); }
+
+  .status { font-size: 14px; color: var(--redup); margin: 12px 0 0; min-height: 20px; }
+  .status.sukses { color: #15803d; }
+  .status.gagal { color: var(--merah); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th {
+    text-align: left; font-weight: 600; color: var(--redup); font-size: 12px;
+    text-transform: uppercase; letter-spacing: .04em; padding: 10px 8px;
+    border-bottom: 2px solid var(--garis);
+  }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--garis); }
+  tbody tr:hover { background: #f8fffd; }
+  td.angka { text-align: right; }
+  tr.kosong { background: var(--merah-muda) !important; }
+  td input {
+    width: 100%; border: 1px solid transparent; padding: 6px 8px; font-size: 14px;
+    background: transparent; border-radius: 6px; color: var(--teks);
+  }
+  td input:hover { border-color: var(--garis); }
+  td input:focus { border-color: var(--aksen); background: #fff; outline: none; }
+  td.angka input { text-align: right; }
+
+  .kosong-tabel { text-align: center; color: var(--redup); padding: 24px; }
+
+  .ringkasan {
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+    background: var(--latar); border-radius: 12px; padding: 14px 18px; margin-top: 16px;
+  }
+  .ringkasan b { font-size: 18px; color: var(--aksen-gelap); }
+  .ringkasan .peringatan { display: block; font-size: 13px; color: var(--merah); font-weight: normal; }
+
+  /* ---------- Responsif: sidebar jadi menu geser di layar kecil ---------- */
+  @media (max-width: 760px) {
+    .tombol-menu { display: block; }
+    .sidebar {
+      position: fixed; left: 0; top: 0; z-index: 15; transform: translateX(-100%);
+      box-shadow: 4px 0 16px rgba(0,0,0,.08);
+    }
+    .sidebar.terbuka { transform: translateX(0); }
+    .konten { padding: 64px 16px 30px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wadah">
+
+  <button class="tombol-menu" id="btnMenu" aria-label="Buka menu">☰</button>
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar" id="sidebar">
+    <h1>Alat Bantu</h1>
+    <button class="menu-btn aktif" data-tab="terbilang"><span class="ikon">🔢</span>Terbilang</button>
+    <button class="menu-btn" data-tab="ocr"><span class="ikon">🖼️</span>Gambar ke Teks</button>
+    <!-- Fitur baru: tambahkan tombol di sini -->
+  </aside>
+
+  <!-- ============ KONTEN ============ -->
+  <main class="konten">
+
+    <!-- ----- FITUR: TERBILANG ----- -->
+    <section id="terbilang" class="tab aktif">
+      <div class="judul-tab">
+        <h2>Terbilang Rupiah</h2>
+        <p>Ketik angka, hasilnya langsung muncul dalam bentuk tulisan.</p>
+      </div>
+      <div class="kartu">
+        <div class="bar">
+          <input type="text" id="inputAngka" class="lebar" placeholder="Contoh: 480.000">
+          <button class="utama" id="btnTerbilang">Ubah</button>
+        </div>
+        <div class="hasil kosong" id="hasilTerbilang">Hasil akan muncul di sini.</div>
+        <div class="bar" style="margin-top:14px">
+          <button class="sekunder" id="btnSalinTerbilang">Salin hasil</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ----- FITUR: GAMBAR KE TEKS ----- -->
+    <section id="ocr" class="tab">
+      <div class="judul-tab">
+        <h2>Gambar ke Teks</h2>
+        <p>Salin gambar tabel, lalu tempel di sini. Data akan dibaca otomatis dan bisa diperbaiki langsung.</p>
+      </div>
+      <div class="kartu">
+        <div class="zona" id="zonaTempel" tabindex="0">
+          <span class="ikon-besar">📋</span>
+          Klik area ini lalu tekan <b>Ctrl+V</b> untuk menempel gambar<br>
+          atau <b>pilih file gambar</b> di bawah
+        </div>
+        <div class="bar">
+          <input type="file" id="fileGambar" accept="image/*">
+          <button class="sekunder" id="btnTambahBaris">+ Tambah Baris</button>
+          <button class="sekunder" id="btnHapusSemua">Hapus Semua</button>
+        </div>
+        <div class="status" id="statusOCR">Belum ada gambar.</div>
+      </div>
+
+      <div class="kartu">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:50px">No</th>
+              <th>Nama Lengkap</th>
+              <th style="width:200px; text-align:right">Jumlah Bruto (Rp)</th>
+              <th style="width:50px"></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyOCR"></tbody>
+        </table>
+        <div id="kosongOCR" class="kosong-tabel">Belum ada data.</div>
+
+        <div class="ringkasan">
+          <div>
+            <b id="totalOCR">Total: Rp0</b>
+            <span class="peringatan" id="peringatanOCR"></span>
+          </div>
+          <button class="utama" id="btnSalinExcel">Salin ke Excel</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Fitur baru: tambahkan <section id="..." class="tab"> di sini -->
+
+  </main>
+</div>
+
+<script>
+/* =========================================================
+   NAVIGASI SIDEBAR
+   ========================================================= */
+const sidebar = document.getElementById("sidebar");
+document.getElementById("btnMenu").addEventListener("click", () => {
+  sidebar.classList.toggle("terbuka");
+});
+
+document.querySelectorAll(".menu-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".menu-btn").forEach(b => b.classList.remove("aktif"));
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("aktif"));
+    btn.classList.add("aktif");
+    document.getElementById(btn.dataset.tab).classList.add("aktif");
+    sidebar.classList.remove("terbuka"); // tutup menu di layar kecil
+  });
+});
+
+/* =========================================================
+   TERBILANG
+   ========================================================= */
+const SATUAN = ["", "satu", "dua", "tiga", "empat", "lima", "enam", "tujuh", "delapan", "sembilan"];
+
+function duaDigit(y) {
+  if (y < 10) return SATUAN[y];
+  if (y === 10) return "sepuluh";
+  if (y === 11) return "sebelas";
+  if (y < 20) return SATUAN[y - 10] + " belas";
+  const puluh = SATUAN[Math.floor(y / 10)] + " puluh";
+  return y % 10 ? puluh + " " + SATUAN[y % 10] : puluh;
+}
+
+function ratusan(x) {
+  if (x === 0) return "";
+  const ratus = Math.floor(x / 100);
+  const sisa = x % 100;
+  let s = "";
+  if (ratus === 1) s = "seratus";
+  else if (ratus > 1) s = SATUAN[ratus] + " ratus";
+  if (sisa) s += (s ? " " : "") + duaDigit(sisa);
+  return s;
+}
+
+function bagian(x) {
+  if (x === 0) return "";
+  if (x < 1000) return ratusan(x);
+  const skala = [[1e12, "triliun"], [1e9, "miliar"], [1e6, "juta"], [1e3, "ribu"]];
+  const out = [];
+  for (const [nilai, nama] of skala) {
+    const q = Math.floor(x / nilai);
+    if (q > 0) {
+      out.push(nama === "ribu" && q === 1 ? "seribu" : bagian(q) + " " + nama);
+      x %= nilai;
+    }
+  }
+  if (x > 0) out.push(ratusan(x));
+  return out.join(" ");
+}
+
+function terbilang(n) {
+  if (n === 0) return "nol";
+  return n < 0 ? "minus " + bagian(-n) : bagian(n);
+}
+
+function parseAngka(teks) {
+  const digit = (teks || "").replace(/[^\d]/g, "");
+  return digit ? parseInt(digit, 10) : null;
+}
+
+function formatRp(n) {
+  return "Rp" + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+const inputAngka = document.getElementById("inputAngka");
+const hasilTerbilang = document.getElementById("hasilTerbilang");
+let teksTerbilang = "";
+
+function prosesTerbilang() {
+  const n = parseAngka(inputAngka.value);
+  if (n === null) {
+    teksTerbilang = "";
+    hasilTerbilang.className = "hasil kosong";
+    hasilTerbilang.textContent = "Hasil akan muncul di sini.";
+    return;
+  }
+  const kata = terbilang(n);
+  teksTerbilang = kata.charAt(0).toUpperCase() + kata.slice(1) + " rupiah";
+  hasilTerbilang.className = "hasil";
+  hasilTerbilang.innerHTML = teksTerbilang + "<small>" + formatRp(n) + "</small>";
+}
+
+document.getElementById("btnTerbilang").addEventListener("click", prosesTerbilang);
+inputAngka.addEventListener("keydown", e => { if (e.key === "Enter") prosesTerbilang(); });
+inputAngka.addEventListener("input", prosesTerbilang);
+document.getElementById("btnSalinTerbilang").addEventListener("click", () => {
+  if (teksTerbilang) salinTeks(teksTerbilang);
+});
+
+/* =========================================================
+   OCR (Tesseract.js)
+   ========================================================= */
+let baris = []; // { nama: string, bruto: number|null }
+const tbody = document.getElementById("tbodyOCR");
+const statusOCR = document.getElementById("statusOCR");
+const zona = document.getElementById("zonaTempel");
+const kosongOCR = document.getElementById("kosongOCR");
+
+function parseTeksOCR(teks) {
+  const hasil = [];
+  let namaSekarang = null;
+  const abaikan = /^(NIP|NPWP|NIK|Nama)\b/i;
+
+  for (const raw of teks.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    const uang = line.match(/(\d{1,3}(?:[.\s]\d{3})+)\s*$/);
+    let namaBagian = line.replace(/\d[\d.\s]*$/, "").replace(/^[\s:.\-|]+|[\s:.\-|]+$/g, "");
+    namaBagian = namaBagian.replace(/^Nama\s*:?\s*/i, "").trim();
+
+    if (!abaikan.test(line) && /[A-Za-z]{3,}/.test(namaBagian)) {
+      namaSekarang = namaBagian;
+    }
+    if (uang && namaSekarang) {
+      hasil.push({ nama: namaSekarang, bruto: parseAngka(uang[1]) });
+      namaSekarang = null;
+    }
+  }
+  return hasil;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+function render() {
+  tbody.innerHTML = "";
+  baris.forEach((r, i) => {
+    const tr = document.createElement("tr");
+    if (r.bruto === null) tr.classList.add("kosong");
+    tr.innerHTML = `
+      <td>${i + 1}</td>
+      <td><input type="text" value="${escapeHtml(r.nama)}" data-i="${i}" data-f="nama"></td>
+      <td class="angka"><input type="text" value="${r.bruto === null ? "" : r.bruto}" data-i="${i}" data-f="bruto"></td>
+      <td><button class="hapus" data-hapus="${i}" title="Hapus baris">✕</button></td>`;
+    tbody.appendChild(tr);
+  });
+  kosongOCR.style.display = baris.length ? "none" : "block";
+  hitungTotal();
+}
+
+function hitungTotal() {
+  let total = 0, kosong = 0;
+  baris.forEach(r => { if (r.bruto === null) kosong++; else total += r.bruto; });
+  document.getElementById("totalOCR").textContent = "Total: " + formatRp(total);
+  document.getElementById("peringatanOCR").textContent =
+    kosong ? kosong + " baris belum punya nilai (ditandai merah)" : "";
+}
+
+function setStatus(pesan, jenis = "") {
+  statusOCR.className = "status " + jenis;
+  statusOCR.textContent = pesan;
+}
+
+// Edit sel langsung di model, tanpa render ulang agar fokus tidak hilang
+tbody.addEventListener("input", e => {
+  const el = e.target;
+  if (!el.dataset.f) return;
+  const i = Number(el.dataset.i);
+  if (el.dataset.f === "nama") {
+    baris[i].nama = el.value;
+  } else {
+    baris[i].bruto = parseAngka(el.value);
+    el.closest("tr").classList.toggle("kosong", baris[i].bruto === null);
+  }
+  hitungTotal();
+});
+
+tbody.addEventListener("click", e => {
+  const idx = e.target.dataset.hapus;
+  if (idx !== undefined) {
+    baris.splice(Number(idx), 1);
+    render();
+  }
+});
+
+document.getElementById("btnTambahBaris").addEventListener("click", () => {
+  baris.push({ nama: "", bruto: null });
+  render();
+});
+
+document.getElementById("btnHapusSemua").addEventListener("click", () => {
+  if (baris.length && confirm("Hapus semua baris?")) {
+    baris = [];
+    render();
+    setStatus("Semua baris dihapus.");
+  }
+});
+
+async function prosesGambar(file) {
+  setStatus("Membaca gambar... (pertama kali bisa lebih lama karena mengunduh data bahasa)");
+  try {
+    const { data: { text } } = await Tesseract.recognize(file, "ind+eng", {
+      logger: m => {
+        if (m.status === "recognizing text") {
+          setStatus("Membaca gambar... " + Math.round(m.progress * 100) + "%");
+        }
+      }
+    });
+    const hasil = parseTeksOCR(text);
+    if (!hasil.length) {
+      setStatus("Tidak ada data yang terbaca. Coba gambar yang lebih jelas.", "gagal");
+      return;
+    }
+    hasil.forEach(h => baris.push(h));
+    render();
+    setStatus(hasil.length + " baris berhasil ditambahkan. Periksa lalu salin ke Excel.", "sukses");
+  } catch (err) {
+    setStatus("Gagal membaca gambar: " + err.message, "gagal");
+  }
+}
+
+document.getElementById("fileGambar").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (file) prosesGambar(file);
+  e.target.value = "";
+});
+
+// Tempel gambar dari clipboard (Ctrl+V) saat tab OCR aktif
+document.addEventListener("paste", e => {
+  if (!document.getElementById("ocr").classList.contains("aktif")) return;
+  const items = e.clipboardData ? e.clipboardData.items : [];
+  for (const item of items) {
+    if (item.type.startsWith("image/")) {
+      prosesGambar(item.getAsFile());
+      return;
+    }
+  }
+  setStatus("Clipboard tidak berisi gambar.", "gagal");
+});
+
+zona.addEventListener("click", () => zona.focus());
+
+/* =========================================================
+   SALIN KE EXCEL / CLIPBOARD
+   ========================================================= */
+function salinTeks(teks) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(teks);
+  }
+  // Cadangan saat file dibuka langsung dari komputer
+  const ta = document.createElement("textarea");
+  ta.value = teks;
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
+  return Promise.resolve();
+}
+
+document.getElementById("btnSalinExcel").addEventListener("click", async () => {
+  if (!baris.length) { setStatus("Belum ada data untuk disalin.", "gagal"); return; }
+  const lines = ["Nama Lengkap\tJumlah Bruto (Rp)"];
+  baris.forEach(r => lines.push(r.nama + "\t" + (r.bruto === null ? "" : r.bruto)));
+  try {
+    await salinTeks(lines.join("\n"));
+    setStatus("Tabel disalin. Tempel di Excel dengan Ctrl+V.", "sukses");
+  } catch (err) {
+    setStatus("Gagal menyalin: " + err.message, "gagal");
+  }
+});
+</script>
+</body>
+</html>
