@@ -21,19 +21,17 @@
   }
   * { box-sizing: border-box; }
   body {
-    font-family: "Segoe UI", system-ui, Arial, sans-serif;
+    font-family: Cambria, Georgia, serif;
     margin: 0; background: var(--latar); color: var(--teks); line-height: 1.5;
   }
+  button, input, select { font-family: inherit; }
 
-  /* ---------- Layout utama ---------- */
   .wadah { display: flex; min-height: 100vh; }
 
-  /* ---------- Sidebar ---------- */
   .sidebar {
     width: var(--lebar-sidebar); background: var(--sidebar);
     border-right: 1px solid var(--garis); padding: 20px 14px;
-    position: sticky; top: 0; height: 100vh; flex-shrink: 0;
-    transition: transform .2s;
+    position: sticky; top: 0; height: 100vh; flex-shrink: 0; transition: transform .2s;
   }
   .sidebar h1 { margin: 0 0 20px 8px; font-size: 20px; color: var(--aksen-gelap); }
   .menu-btn {
@@ -52,7 +50,6 @@
     padding: 8px 12px; font-size: 18px; cursor: pointer;
   }
 
-  /* ---------- Area konten ---------- */
   .konten { flex: 1; min-width: 0; padding: 28px 32px 40px; }
   .tab { display: none; }
   .tab.aktif { display: block; }
@@ -70,6 +67,10 @@
     border-radius: 10px; outline: none; transition: border-color .15s, box-shadow .15s;
   }
   input[type=text]:focus { border-color: var(--aksen); box-shadow: 0 0 0 3px rgba(15,118,110,.15); }
+  select {
+    padding: 10px 12px; font-size: 14px; border: 1px solid var(--garis);
+    border-radius: 10px; background: #fff; color: var(--teks);
+  }
 
   .bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .bar.kanan { justify-content: space-between; }
@@ -139,7 +140,6 @@
   .ringkasan b { font-size: 18px; color: var(--aksen-gelap); }
   .ringkasan .peringatan { display: block; font-size: 13px; color: var(--merah); font-weight: normal; }
 
-  /* ---------- Responsif: sidebar jadi menu geser di layar kecil ---------- */
   @media (max-width: 760px) {
     .tombol-menu { display: block; }
     .sidebar {
@@ -180,15 +180,13 @@
           <button class="utama" id="btnTerbilang">Ubah</button>
         </div>
         <div class="hasil kosong" id="hasilTerbilang">Hasil akan muncul di sini.</div>
-        <div class="bar" style="margin-top:14px; align-items:center">
-  <select id="formatSalin" style="padding:10px 12px; border:1px solid var(--garis); border-radius:10px; font-size:14px; background:#fff">
-    <option value="asli">Format asli (Kalimat)</option>
-    <option value="upper">UPPERCASE</option>
-    <option value="capitalize">Capitalize Each Word</option>
-    <option value="lower">lowercase</option>
-  </select>
-  <button class="sekunder" id="btnSalinTerbilang">Salin hasil</button>
-</div>
+        <div class="bar" style="margin-top:14px">
+          <select id="formatSalin">
+            <option value="asli">Format asli (Kalimat)</option>
+            <option value="upper">UPPERCASE</option>
+            <option value="capitalize">Capitalize Each Word</option>
+            <option value="lower">lowercase</option>
+          </select>
           <button class="sekunder" id="btnSalinTerbilang">Salin hasil</button>
         </div>
       </div>
@@ -258,9 +256,25 @@ document.querySelectorAll(".menu-btn").forEach(btn => {
     document.querySelectorAll(".tab").forEach(t => t.classList.remove("aktif"));
     btn.classList.add("aktif");
     document.getElementById(btn.dataset.tab).classList.add("aktif");
-    sidebar.classList.remove("terbuka"); // tutup menu di layar kecil
+    sidebar.classList.remove("terbuka");
   });
 });
+
+/* =========================================================
+   SALIN KE CLIPBOARD (dipakai semua fitur)
+   ========================================================= */
+function salinTeks(teks) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(teks);
+  }
+  const ta = document.createElement("textarea");
+  ta.value = teks;
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
+  return Promise.resolve();
+}
 
 /* =========================================================
    TERBILANG
@@ -317,6 +331,15 @@ function formatRp(n) {
   return "Rp" + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
+function formatTeks(teks, jenis) {
+  if (jenis === "upper") return teks.toUpperCase();
+  if (jenis === "lower") return teks.toLowerCase();
+  if (jenis === "capitalize") {
+    return teks.toLowerCase().replace(/\b\p{L}/gu, huruf => huruf.toUpperCase());
+  }
+  return teks;
+}
+
 const inputAngka = document.getElementById("inputAngka");
 const hasilTerbilang = document.getElementById("hasilTerbilang");
 let teksTerbilang = "";
@@ -338,14 +361,6 @@ function prosesTerbilang() {
 document.getElementById("btnTerbilang").addEventListener("click", prosesTerbilang);
 inputAngka.addEventListener("keydown", e => { if (e.key === "Enter") prosesTerbilang(); });
 inputAngka.addEventListener("input", prosesTerbilang);
-function formatTeks(teks, jenis) {
-  if (jenis === "upper") return teks.toUpperCase();
-  if (jenis === "lower") return teks.toLowerCase();
-  if (jenis === "capitalize") {
-    return teks.toLowerCase().replace(/\b\p{L}/gu, huruf => huruf.toUpperCase());
-  }
-  return teks; // asli
-}
 
 document.getElementById("btnSalinTerbilang").addEventListener("click", () => {
   if (!teksTerbilang) return;
@@ -354,8 +369,6 @@ document.getElementById("btnSalinTerbilang").addEventListener("click", () => {
   const tombol = document.getElementById("btnSalinTerbilang");
   tombol.textContent = "Tersalin!";
   setTimeout(() => (tombol.textContent = "Salin hasil"), 1500);
-});.addEventListener("click", () => {
-  if (teksTerbilang) salinTeks(teksTerbilang);
 });
 
 /* =========================================================
@@ -424,7 +437,6 @@ function setStatus(pesan, jenis = "") {
   statusOCR.textContent = pesan;
 }
 
-// Edit sel langsung di model, tanpa render ulang agar fokus tidak hilang
 tbody.addEventListener("input", e => {
   const el = e.target;
   if (!el.dataset.f) return;
@@ -488,7 +500,6 @@ document.getElementById("fileGambar").addEventListener("change", e => {
   e.target.value = "";
 });
 
-// Tempel gambar dari clipboard (Ctrl+V) saat tab OCR aktif
 document.addEventListener("paste", e => {
   if (!document.getElementById("ocr").classList.contains("aktif")) return;
   const items = e.clipboardData ? e.clipboardData.items : [];
@@ -502,23 +513,6 @@ document.addEventListener("paste", e => {
 });
 
 zona.addEventListener("click", () => zona.focus());
-
-/* =========================================================
-   SALIN KE EXCEL / CLIPBOARD
-   ========================================================= */
-function salinTeks(teks) {
-  if (navigator.clipboard && window.isSecureContext) {
-    return navigator.clipboard.writeText(teks);
-  }
-  // Cadangan saat file dibuka langsung dari komputer
-  const ta = document.createElement("textarea");
-  ta.value = teks;
-  document.body.appendChild(ta);
-  ta.select();
-  document.execCommand("copy");
-  document.body.removeChild(ta);
-  return Promise.resolve();
-}
 
 document.getElementById("btnSalinExcel").addEventListener("click", async () => {
   if (!baris.length) { setStatus("Belum ada data untuk disalin.", "gagal"); return; }
