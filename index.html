@@ -582,9 +582,10 @@ function parseSBPEP(data) {
       if (v.length >= 12) kandidatNpwp.push({ j, v });
       return;
     }
-    // Cadangan: angka 15-16 digit pada baris yang bukan label NIP/NIK
-    if (/NIP|NIK/i.test(t)) return;
-    const m2 = t.match(/(?<!\d)\d{15,16}(?!\d)/);
+    // Cadangan: angka 15-16 digit, termasuk baris NIK (NPWP sering sama dengan NIK).
+    // Spasi di antara digit dihapus dulu agar angka yang terpisah tetap terbaca.
+    const tanpaSpasi = t.replace(/(?<=\d)\s+(?=\d)/g, "");
+    const m2 = tanpaSpasi.match(/(?<!\d)\d{15,16}(?!\d)/);
     if (m2) kandidatNpwp.push({ j, v: m2[0] });
   });
 
