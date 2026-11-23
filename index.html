@@ -335,8 +335,10 @@ function formatTeks(teks, jenis) {
   if (jenis === "upper") return teks.toUpperCase();
   if (jenis === "lower") return teks.toLowerCase();
   if (jenis === "capitalize") {
-    return teks.toLowerCase().replace(/\b\p{L}/gu, huruf => huruf.toUpperCase());
-  }
+    return teks.toLowerCase().split(" ").map(kata =>
+      kata.charAt(0).toUpperCase() + kata.slice(1)
+    ).join(" ");
+  } 
   return teks;
 }
 
