@@ -161,7 +161,7 @@
   <aside class="sidebar" id="sidebar">
     <h1>Alat Bantu</h1>
     <button class="menu-btn aktif" data-tab="terbilang"><span class="ikon">🔢</span>Terbilang</button>
-    <button class="menu-btn" data-tab="ocr"><span class="ikon">🖼️</span>Gambar ke Teks</button>
+    <button class="menu-btn" data-tab="ocr"><span class="ikon">🖼️</span>Gambar ke Teks - PPh 21 Final</button>
     <!-- Fitur baru: tambahkan tombol di sini -->
   </aside>
 
@@ -192,11 +192,11 @@
       </div>
     </section>
 
-    <!-- ----- FITUR: GAMBAR KE TEKS ----- -->
+    <!-- ----- FITUR: GAMBAR KE TEKS - PPH 21 FINAL ----- -->
     <section id="ocr" class="tab">
       <div class="judul-tab">
-        <h2>Gambar ke Teks</h2>
-        <p>Tempel gambar, lalu hasilnya ditampilkan sebagai teks atau tabel. Anda bisa memperbaiki isinya langsung.</p>
+        <h2>Gambar ke Teks - PPh 21 Final</h2>
+        <p>Tempel gambar tabel PPh 21 Final. Hasilnya berisi nama, NPWP, dan jumlah bruto per orang.</p>
       </div>
 
       <div class="kartu">
@@ -209,10 +209,10 @@
           <input type="file" id="fileGambar" accept="image/*">
           <span class="label-mode">Mode:</span>
           <select id="modeOCR">
+            <option value="sbpep">PPh 21 Final - SBPEP (NPWP & Bruto)</option>
             <option value="otomatis">Otomatis</option>
             <option value="teks">Teks</option>
             <option value="tabel">Tabel</option>
-            <option value="dokumen">Dokumen SBK (per orang)</option>
           </select>
         </div>
         <div class="status" id="statusOCR">Belum ada gambar.</div>
@@ -227,7 +227,7 @@
         </div>
       </div>
 
-      <!-- Hasil mode TABEL dan DOKUMEN -->
+      <!-- Hasil mode TABEL dan PPh 21 Final -->
       <div class="kartu" id="kartuTabel" style="display:none">
         <div class="pengaturan">
           <label class="label-mode">
@@ -429,7 +429,7 @@ const nilaiRentang = document.getElementById("nilaiRentang");
 const infoTabel = document.getElementById("infoTabel");
 
 let worker = null;       // worker Tesseract, dibuat sekali lalu dipakai ulang
-let terakhirData = null; // hasil mentah OCR terakhir (teks + kata + posisi)
+let terakhirData = null; // hasil mentah OCR terakhir
 let kataTerakhir = [];   // kata beserta posisinya, untuk membentuk tabel
 let tabelData = [];      // array of array (sel berupa string), bisa diedit
 let adaHasil = false;
@@ -550,61 +550,73 @@ function buatTabel(kata, faktor) {
 }
 
 /* =========================================================
-   MODE DOKUMEN SBK: cari baris yang memuat nilai rupiah,
-   lalu ambil nama, NIP, NPWP, dan NIK dari baris di sekitarnya
+   MODE PPh 21 FINAL - SBPEP
+   Setiap orang diawali label NIP. Dari blok itu diambil:
+   - Nama: baris teks paling dekat di atas label NIP
+   - NPWP: nilai setelah label NPWP
+   - Bruto: nilai rupiah yang jika dikurangi PPh 5% menghasilkan neto
    ========================================================= */
-function parseDokumenSBK(data) {
+function parseSBPEP(data) {
   const garis = (data.lines && data.lines.length)
     ? data.lines.map(l => l.text.trim())
     : (data.text || "").split("\n").map(s => s.trim());
 
+  const rxNip = /\bNIP\b/i;
+  const rxNpwp = /NPWP\s*[:.]?\s*([\d.\-\s]{8,})/i;
   const rxUang = /\d{1,3}(?:\.\d{3})+/g;
   const rxNama = /^[A-Za-z][A-Za-z.' ]{4,}$/;
-  const abaikan = /(NIP|NPWP|NIK|JABATAN|NAMA|TANGGAL|TARIF|BRUTO|NETO|Tim|Anggota|Ketua|Agustus|Juli|September|Oktober)/i;
-  const rxNip = /NIP\s*[:.]?\s*([\d\s]{10,})/i;
-  const rxNpwp = /NPWP\s*[:.]?\s*([\d.\-\s]{8,})/i;
-  const rxNik = /NIK\s*[:.]?\s*([\d\s]{10,})/i;
+  const rxLabel = /(NIP|NPWP|NIK|JABATAN|TANGGAL|TARIF|BRUTO|NETO|Ketua|Anggota|Tim|Agustus)/i;
+
+  // Posisi setiap label NIP menandai awal satu orang
+  const awal = [];
+  garis.forEach((t, i) => { if (rxNip.test(t)) awal.push(i); });
+
   const hasil = [];
+  awal.forEach((mulai, k) => {
+    const sebelumnya = k > 0 ? awal[k - 1] + 1 : 0;
+    const selesai = k + 1 < awal.length ? awal[k + 1] : garis.length;
 
-  // Ambil nilai label (NIP/NPWP/NIK) dari beberapa baris mulai indeks
-  function ambilLabel(indeks, rx) {
-    for (let j = indeks; j < Math.min(garis.length, indeks + 4); j++) {
-      const m = garis[j].match(rx);
-      if (m) return m[1].replace(/\s/g, "");
-    }
-    return "";
-  }
-
-  garis.forEach((teks, i) => {
-    const nilai = teks.match(rxUang);
-    if (!nilai || nilai.length < 2) return;
-
-    // Cari nama: mundur maksimal 4 baris, ambil yang paling dekat
+    // 1. Nama: cari mundur dari label NIP, maksimal 2 baris
     let nama = "";
-    let indeksNama = -1;
-    for (let j = i; j >= Math.max(0, i - 4) && !nama; j--) {
-      const kandidat = garis[j].replace(/^\d{1,2}\s+/, "").replace(/[|_]/g, "").trim();
-      if (rxNama.test(kandidat) && !abaikan.test(kandidat)) {
-        nama = kandidat;
-        indeksNama = j;
-      }
+    for (let j = mulai; j >= Math.max(0, mulai - 2) && !nama; j--) {
+      const c = garis[j].replace(/^\d{1,2}\s+/, "").replace(/[|_]/g, "").trim();
+      if (rxNama.test(c) && !rxLabel.test(c)) nama = c;
     }
     if (!nama) return;
 
-    const nip = ambilLabel(indeksNama, rxNip);
-    const npwp = ambilLabel(indeksNama, rxNpwp);
-    const nik = ambilLabel(indeksNama, rxNik);
+    // 2. NPWP: cari di blok orang ini
+    let npwp = "";
+    for (let j = sebelumnya; j < selesai && !npwp; j++) {
+      const m = garis[j].match(rxNpwp);
+      if (m) npwp = m[1].replace(/\s/g, "");
+    }
 
-    const tarif = nilai[0];
-    const bruto = nilai[1];
-    const neto = nilai[nilai.length - 1];
-    hasil.push([nama, nip, npwp, nik, tarif, bruto, neto]);
+    // 3. Bruto: kumpulkan nilai rupiah dari baris blok (abaikan baris label)
+    const kandidat = [];
+    for (let j = sebelumnya; j < selesai; j++) {
+      if (/(NIP|NPWP|NIK)/i.test(garis[j])) continue;
+      const cocok = garis[j].match(rxUang) || [];
+      cocok.forEach(s => kandidat.push(parseAngka(s)));
+    }
+
+    let bruto = null;
+    for (const b of kandidat) {
+      const pph = Math.round(b * 0.05);
+      const neto = b - pph;
+      if (kandidat.includes(neto)) { bruto = b; break; }
+    }
+    // Cadangan: jika tidak ada pasangan bruto-neto yang cocok, ambil nilai terbesar kedua
+    if (bruto === null && kandidat.length >= 2) {
+      bruto = [...kandidat].sort((a, b) => b - a)[1];
+    }
+
+    hasil.push([nama, npwp, bruto === null ? "" : String(bruto)]);
   });
 
   return hasil;
 }
 
-const HEADER_DOKUMEN = ["Nama Lengkap", "NIP", "NPWP", "NIK", "Tarif", "Jumlah Bruto (Rp)", "Jumlah Neto (Rp)"];
+const HEADER_SBPEP = ["Nama Lengkap", "NPWP", "Jumlah Bruto (Rp)"];
 
 // Mode otomatis: jika mayoritas baris punya 2 kolom atau lebih, anggap tabel
 function apakahTabel(baris) {
@@ -633,11 +645,11 @@ function tampilkanDariData() {
   const mode = modeOCR.value;
   let bentuk;
 
-  if (mode === "dokumen") {
-    bentuk = "dokumen";
+  if (mode === "sbpep") {
+    bentuk = "sbpep";
     cekHeader.checked = true;
-    const rows = terakhirData ? parseDokumenSBK(terakhirData) : [];
-    tabelData = [HEADER_DOKUMEN, ...rows];
+    const rows = terakhirData ? parseSBPEP(terakhirData) : [];
+    tabelData = [HEADER_SBPEP, ...rows];
   } else {
     const dariKata = buatTabel(kataTerakhir, Number(rentangKolom.value));
     tabelData = dariKata.length
@@ -718,7 +730,7 @@ rentangKolom.addEventListener("input", () => {
   nilaiRentang.textContent = Number(rentangKolom.value).toFixed(1);
 });
 rentangKolom.addEventListener("change", () => {
-  if (modeOCR.value === "dokumen" || !kataTerakhir.length) return;
+  if (modeOCR.value === "sbpep" || !kataTerakhir.length) return;
   tampilkanDariData();
   setStatus("Kolom dihitung ulang dengan jarak " + Number(rentangKolom.value).toFixed(1) + ".");
 });
@@ -730,7 +742,7 @@ modeOCR.addEventListener("change", () => {
 });
 
 document.getElementById("btnTambahBaris").addEventListener("click", () => {
-  if (!adaHasil) { adaHasil = true; }
+  adaHasil = true;
   tabelData.push(Array(Math.max(1, kolomTabel)).fill(""));
   kartuTeks.style.display = "none";
   kartuTabel.style.display = "block";
@@ -738,7 +750,7 @@ document.getElementById("btnTambahBaris").addEventListener("click", () => {
 });
 
 document.getElementById("btnTambahKolom").addEventListener("click", () => {
-  if (!adaHasil) { adaHasil = true; }
+  adaHasil = true;
   if (!tabelData.length) tabelData.push([""]);
   tabelData = tabelData.map(r => [...r, ""]);
   kartuTeks.style.display = "none";
@@ -788,11 +800,11 @@ async function prosesGambar(file) {
     adaHasil = true;
     const bentuk = tampilkanDariData();
 
-    if (bentuk === "dokumen") {
+    if (bentuk === "sbpep") {
       const jumlah = tabelData.length - 1;
       setStatus(jumlah > 0
-        ? jumlah + " orang terbaca. Periksa lalu salin ke Excel."
-        : "Tidak ada baris dengan nilai rupiah yang terbaca.",
+        ? jumlah + " orang terbaca. Periksa NPWP dan bruto, lalu salin ke Excel."
+        : "Tidak ada data orang yang terbaca. Coba gambar yang lebih jelas.",
         jumlah > 0 ? "sukses" : "gagal");
     } else {
       setStatus(tabelData.length + " baris terbaca sebagai " + bentuk + ". Periksa lalu salin.", "sukses");
