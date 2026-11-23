@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BKU Bendahara</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--aksen:#0f766e;--aksen-muda:#ecfdf5;--latar:#f8fafc;--kartu:#fff;--teks:#1e293b;--redup:#64748b;--garis:#e2e8f0;--merah:#b91c1c;--kuning:#fef9c3}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--aksen-muda:#134e4a;--latar:#0f172a;--kartu:#1e293b;--teks:#e2e8f0;--redup:#94a3b8;--garis:#334155;--kuning:#422006}}
+*{box-sizing:border-box}
+body{font-family:system-ui,sans-serif;margin:0;background:var(--latar);color:var(--teks);padding:16px;font-size:14px}
+h1{font-size:20px;margin:0 0 4px}
+.sub{color:var(--redup);margin:0 0 14px}
+.kartu{background:var(--kartu);border:1px solid var(--garis);border-radius:12px;padding:16px;margin-bottom:14px}
+.banner{background:var(--kuning);border-radius:10px;padding:10px 14px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--redup)}
+label.cek{flex-direction:row;align-items:center;gap:6px;color:var(--teks);font-size:13px}
+input,select{padding:8px 10px;border:1px solid var(--garis);border-radius:8px;font-size:14px;background:var(--kartu);color:var(--teks);font-family:inherit}
+input[type=checkbox]{width:16px;height:16px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+button{padding:8px 14px;border-radius:8px;border:1px solid var(--garis);background:var(--kartu);color:var(--teks);cursor:pointer;font-size:13px}
+button.utama{background:var(--aksen);color:#fff;border-color:var(--aksen);font-weight:600}
+button.kecil{padding:3px 8px;font-size:12px}
+button.bahaya{color:var(--merah)}
+.ringkas{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.ringkas div{background:var(--aksen-muda);border-radius:10px;padding:10px 12px}
+.ringkas small{display:block;color:var(--redup)}
+.ringkas b{font-size:16px}
+.tabel-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:900px}
+th,td{border-bottom:1px solid var(--garis);padding:7px 8px;text-align:left;white-space:nowrap}
+th{background:var(--latar);font-weight:600;font-size:12px;color:var(--redup)}
+td.angka,th.angka{text-align:right}
+.status{padding:2px 8px;border-radius:999px;font-size:12px;background:var(--latar)}
+.s-lunas{background:#dcfce7;color:#166534}
+.s-bupot{background:#fee2e2;color:var(--merah)}
+.s-setor{background:#fef9c3}
+.centang{letter-spacing:2px;font-family:monospace;color:var(--redup)}
+.formulir{display:grid;grid-template-columns:1fr 1fr;gap:8px 32px}
+.kolom{display:flex;flex-direction:column;gap:8px;min-width:0}
+.formulir .baris input,.formulir .baris select{width:100%}
+.formulir .baris{display:grid;grid-template-columns:170px 1fr;align-items:center;gap:10px}
+.formulir .baris>span{font-size:13px;font-weight:600;color:var(--teks)}
+.formulir input[readonly]{background:var(--garis);color:var(--teks);text-align:right;cursor:default}
+@media (max-width:700px){.formulir{grid-template-columns:1fr}}
+#pesan{margin-top:8px;color:var(--aksen);min-height:18px}
+</style>
+</head>
+<body>
+
+<h1>BKU Bendahara Pengeluaran</h1>
+<p class="sub">Pencatatan SPJ, pajak, dan pembayaran. Data tersimpan di browser perangkat ini.</p>
+
+<div class="banner" id="banner" style="display:none"></div>
+
+<!-- ============ RINGKASAN ============ -->
+<div class="kartu">
+  <div class="ringkas" id="ringkas"></div>
+</div>
+
+<!-- ============ FORMULIR ============ -->
+<div class="kartu">
+  <h3 style="margin:0 0 10px" id="judulForm">Tambah SPJ</h3>
+  <form id="form">
+    <div class="formulir" id="fieldWrap"></div>
+    <div class="bar">
+      <label class="cek"><input type="checkbox" name="bupot"> Bupot dibuat</label>
+      <label class="cek"><input type="checkbox" name="faktur"> Faktur pajak (PPN) dilaporkan</label>
+      <label class="cek"><input type="checkbox" name="sintag"> Sudah di Sintag</label>
+      <label class="cek"><input type="checkbox" name="pungut"> Pajak dipungut (SAKTI)</label>
+      <label class="cek"><input type="checkbox" name="setorSakti"> Pajak disetor (SAKTI)</label>
+      <label class="cek"><input type="checkbox" name="registerBilling"> Pajak sudah disetor</label>
+      <label class="cek"><input type="checkbox" name="registerBayar"> SPJ sudah dibayar</label>
+    </div>
+    <div class="bar">
+      <button class="utama" type="submit">Simpan</button>
+      <button type="button" id="btnBatal">Batal</button>
+      <span id="pesan"></span>
+    </div>
+  </form>
+</div>
+
+<!-- ============ SALDO KAS & GUP ============ -->
+<div class="kartu">
+  <h3 style="margin:0 0 10px">Saldo Kas & Pengajuan GUP/TUP</h3>
+  <div class="ringkas" id="ringkasKas"></div>
+  <div class="formulir" style="margin-top:12px">
+    <div class="kolom">
+      <div class="baris"><span>Tanggal GUP</span><input type="date" id="gupTanggal"></div>
+      <div class="baris"><span>Jumlah (Rp)</span><input type="number" id="gupJumlah" min="0"></div>
+    </div>
+    <div class="kolom">
+      <div class="baris"><span>Masuk ke</span><select id="gupPool"><option value="UP">Saldo UP (GUP)</option><option value="TUP">Saldo TUP</option></select></div>
+      <div class="baris"><span>Keterangan</span><input type="text" id="gupKet" placeholder="No. SPM/SP2D, dll"></div>
+      <div class="baris"><span></span><div class="bar"><button class="utama" onclick="tambahGup()">Tambah GUP/TUP</button><span id="pesanGup" style="color:var(--redup)"></span></div></div>
+    </div>
+  </div>
+  <div class="tabel-wrap" style="margin-top:12px">
+    <table>
+      <thead><tr><th>Tanggal</th><th class="angka">Jumlah</th><th>Masuk ke</th><th>Keterangan</th><th>Aksi</th></tr></thead>
+      <tbody id="tbodyGup"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ============ PANEL IMPOR ============ -->
+<div class="kartu" id="panelImpor" style="display:none"></div>
+
+<!-- ============ PANEL RIWAYAT ============ -->
+<div class="kartu" id="panelRiwayat" style="display:none"></div>
+
+<!-- ============ FILTER & TABEL ============ -->
+<div class="kartu">
+  <h3 style="margin:0 0 10px">Cari SPJ</h3>
+  <div class="formulir" style="margin-top:0">
+    <div class="kolom">
+      <div class="baris"><span>Cari</span><input type="text" id="cari" placeholder="No. register, penagih, atau uraian"></div>
+      <div class="baris"><span>PPK</span><select id="filterPPK"><option value="">Semua PPK</option></select></div>
+    </div>
+    <div class="kolom">
+      <div class="baris"><span>Jenis tagihan</span><select id="filterJenis"><option value="">Semua jenis</option><option>UP</option><option>TUP</option><option>LS</option><option>KKP</option></select></div>
+      <div class="baris"><span>Status</span><div class="bar"><select id="filterStatus" style="flex:1"><option value="">Semua status</option><option>Belum Bupot</option><option>Belum Setor</option><option>Belum Bayar</option><option>Dikirim</option><option>Lunas</option></select><button class="utama" onclick="tampilkanSemua()">Cari</button></div></div>
+    </div>
+  </div>
+  <div class="tabel-wrap" style="margin-top:12px">
+    <table>
+      <thead><tr>
+        <th>No</th><th>Tanggal</th><th>No. Register</th><th>Penagih</th><th>PPK</th><th>Jenis</th>
+        <th class="angka">Bruto</th><th class="angka">Pajak</th><th class="angka">Netto</th><th class="angka">Sisa saldo sblm bayar</th>
+        <th title="Bupot dibuat">BP</th><th title="Faktur pajak dilaporkan">FP</th><th title="Sudah di Sintag">SG</th><th title="Pajak dipungut">PG</th><th title="Pajak disetor (SAKTI)">SK</th><th title="Pajak sudah disetor">DS</th><th title="SPJ sudah dibayar">DB</th><th>Status</th><th>Aksi</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div class="bar">
+    <button onclick="document.getElementById('fileExcel').click()">Impor Excel (.xlsx)</button>
+    <input type="file" id="fileExcel" accept=".xlsx,.xls" hidden>
+    <button id="btnCSV">Ekspor CSV</button>
+    <button class="utama" id="btnExport">Ekspor Data (JSON)</button>
+    <label style="flex-direction:row;align-items:center"><button type="button" onclick="document.getElementById('fileImpor').click()">Impor Data (JSON)</button>
+      <input type="file" id="fileImpor" accept=".json,application/json" hidden></label>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   KONFIGURASI
+   ========================================================= */
+const KUNCI = "bku-v1";
+const KUNCI_EKSPOR = "bku-ekspor-terakhir";
+const PPK = ["Nur Pramono", "Eko Aprijanto", "Yan Budiyanto"];
+const JENIS = ["UP", "TUP", "LS", "KKP"];
+
+// Field formulir: [nama, label, tipe, opsi]
+const FIELD = [
+  ["tanggal", "Tanggal masuk SPJ", "date"],
+  ["noReg", "No. Register SPJ", "text"],
+  ["penagih", "Nama penagih", "text"],
+  ["npwp", "NPWP", "text"],
+  ["jenis", "Jenis tagihan", "select", JENIS],
+  ["ppk", "PPK", "select", PPK],
+  ["noSpby", "No. SPBy (SAKTI)", "text"],
+  ["uraian", "Uraian / keperluan", "text"],
+  ["kodeAkun", "Kode akun / MAK", "text"],
+  ["bruto", "Nilai bruto (Rp)", "number"],
+  ["pph21", "PPh 21 (Rp)", "number"],
+  ["noKuitansi", "No. Kuitansi (SAKTI)", "text"],
+
+  ["tglSetor", "Tanggal setor pajak", "date"],
+  ["tglBayar", "Tanggal bayar (bank)", "date"],
+  ["keterangan", "Keterangan", "text"]
+];
+const CEKLIS = [["bupot","BP"],["faktur","FP"],["sintag","SG"],["pungut","PG"],["setorSakti","SK"],["registerBilling","DS"],["registerBayar","DB"]];
+
+// Pajak yang dihitung dari DPP x tarif. Pajak = DPP x tarif / 100
+const PAJAK_DPP = [
+  {id: "22", pajak: "pph22", label: "PPh 22", tarif: 1.5},
+  {id: "23", pajak: "pph23", label: "PPh 23", tarif: 2},
+  {id: "Ppn", pajak: "ppn", label: "PPN", tarif: 12}
+];
+
+/* =========================================================
+   DATA & PERHITUNGAN
+   ========================================================= */
+let data = muatData();
+let editId = null;
+
+const KUNCI_GUP = "bku-gup-v1";
+function muatGup() { try { return JSON.parse(localStorage.getItem(KUNCI_GUP)) || []; } catch (e) { return []; } }
+let gup = muatGup();
+
+// Saldo UP dan TUP terpisah. SPJ UP dibayar dari saldo UP, SPJ TUP dari saldo TUP (bruto saat tglBayar). LS dan KKP tidak lewat kas ini
+// Sisa kas sebelum SPJ dibayar dihitung urut tanggal; SPJ belum bayar memakai saldo sekarang
+function hitungKas() {
+  const ev = [];
+  gup.forEach(g => ev.push({ tgl: String(g.tanggal), urut: 0, jumlah: angka(g.jumlah), pool: g.pool || "UP" }));
+  data.map(hitung).forEach(r => {
+    if (r.tglBayar && (r.jenis === "UP" || r.jenis === "TUP")) ev.push({ tgl: String(r.tglBayar), urut: 1, jumlah: -angka(r.bruto), id: r.id, noReg: String(r.noReg), pool: r.jenis });
+  });
+  ev.sort((a, b) => a.tgl.localeCompare(b.tgl) || a.urut - b.urut || String(a.noReg ?? "").localeCompare(String(b.noReg ?? "")));
+  const sisa = {};
+  const saldo = { UP: 0, TUP: 0 };
+  ev.forEach(e => { if (e.id !== undefined) sisa[e.id] = saldo[e.pool]; saldo[e.pool] += e.jumlah; });
+  data.forEach(r => { if (!(r.id in sisa)) sisa[r.id] = (r.jenis === "UP" || r.jenis === "TUP") ? saldo[r.jenis] : null; });
+  return { saldo, sisa };
+}
+
+window.tambahGup = () => {
+  const tgl = document.getElementById("gupTanggal").value;
+  const jml = angka(document.getElementById("gupJumlah").value);
+  const ket = document.getElementById("gupKet").value.trim();
+  const pesan = document.getElementById("pesanGup");
+  if (!tgl || jml <= 0) { pesan.textContent = "Isi tanggal dan jumlah GUP."; return; }
+  gup.push({ id: Date.now(), tanggal: tgl, jumlah: jml, pool: document.getElementById("gupPool").value, keterangan: ket });
+  simpanData();
+  document.getElementById("gupJumlah").value = "";
+  document.getElementById("gupKet").value = "";
+  pesan.textContent = "GUP ditambahkan.";
+  tampilkanSemua();
+};
+
+window.hapusGup = id => {
+  const g = gup.find(x => x.id === id);
+  if (!g) return;
+  tampilKonfirmasi(`Hapus pengajuan ${esc(g.tanggal)} sebesar ${rupiah(g.jumlah)} (${g.pool || "UP"})?`, () => {
+    gup = gup.filter(x => x.id !== id);
+    simpanData();
+    tampilkanSemua();
+  });
+};
+
+function tampilkanKas() {
+  const { saldo } = hitungKas();
+  const totalGup = gup.reduce((s, g) => s + angka(g.jumlah), 0);
+  const totalTup = data.filter(r => r.tglBayar && r.jenis === "TUP").reduce((s, r) => s + angka(r.bruto), 0);
+  const totalKeluar = data.filter(r => r.tglBayar && r.jenis === "UP").reduce((s, r) => s + angka(r.bruto), 0);
+  document.getElementById("ringkasKas").innerHTML = `
+    <div><small>Total GUP/TUP masuk</small><b>${rupiah(totalGup)}</b></div>
+    <div><small>Dibayar dari TUP</small><b>${rupiah(totalTup)}</b></div>
+    <div><small>Dibayar dari UP</small><b>${rupiah(totalKeluar)}</b></div>
+    <div><small>Saldo UP sekarang</small><b>${rupiah(saldo.UP)}</b></div>
+    <div><small>Saldo TUP sekarang</small><b>${rupiah(saldo.TUP)}</b></div>`;
+  const daftar = gup.slice().sort((a, b) => String(b.tanggal).localeCompare(String(a.tanggal)));
+  document.getElementById("tbodyGup").innerHTML = daftar.map(g =>
+    `<tr><td>${esc(g.tanggal)}</td><td class="angka">${rupiah(g.jumlah)}</td><td>${g.pool || "UP"}</td><td>${esc(g.keterangan)}</td><td><button class="kecil bahaya" onclick="hapusGup(${g.id})">Hapus</button></td></tr>`
+  ).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--redup)">Belum ada GUP.</td></tr>`;
+}
+
+function muatData() {
+  try { return JSON.parse(localStorage.getItem(KUNCI)) || []; } catch (e) { return []; }
+}
+function simpanData() {
+  localStorage.setItem(KUNCI, JSON.stringify(data));
+  localStorage.setItem(KUNCI_GUP, JSON.stringify(gup));
+  perbaruiBanner();
+}
+
+const angka = v => Number(v) || 0;
+const rupiah = n => Math.round(n).toLocaleString("id-ID");
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// Nilai turunan: dihitung otomatis, tidak diisi manual
+function hitung(r) {
+  const deposit = angka(r.pph21) + angka(r.pph22) + angka(r.pph23) + angka(r.ppn);
+  return {
+    ...r,
+    deposit,
+    netto: angka(r.bruto) - deposit
+  };
+}
+
+// PPh disetor paling lambat tanggal 10 bulan berikutnya
+function batasSetor(tgl) {
+  if (!tgl) return "-";
+  const d = new Date(tgl);
+  return new Date(d.getFullYear(), d.getMonth() + 1, 10).toLocaleDateString("id-ID");
+}
+
+// Status berdasarkan checklist
+function statusRecord(r) {
+  const adaPph = angka(r.pph21) + angka(r.pph22) + angka(r.pph23) > 0;
+  if (adaPph && !r.bupot) return "Belum Bupot";
+  if (r.registerBayar && r.tglBayar) return "Lunas";
+  if (r.registerBayar) return "Dikirim";
+  if (angka(r.deposit) > 0 && !r.tglSetor) return "Belum Setor";
+  return "Belum Bayar";
+}
+const kelasStatus = s => s === "Lunas" ? "s-lunas" : s === "Belum Bupot" ? "s-bupot" : s === "Belum Setor" ? "s-setor" : "";
+
+/* =========================================================
+   FORMULIR
+   ========================================================= */
+const form = document.getElementById("form");
+const fieldWrap = document.getElementById("fieldWrap");
+
+fieldWrap.innerHTML = FIELD.map(([nama, label, tipe, opsi]) => {
+  let input;
+  if (tipe === "select") {
+    input = `<select name="${nama}">` + opsi.map(o => `<option>${o}</option>`).join("") + `</select>`;
+  } else {
+    const step = tipe === "number" ? ' step="1" min="0"' : "";
+    input = `<input type="${tipe}" name="${nama}"${step}>`;
+  }
+  return `<div class="baris"><span>${label}</span>${input}</div>`;
+}).join("");
+
+// Blok pajak: centang, isi DPP, tarif terisi otomatis, pajak terhitung
+fieldWrap.insertAdjacentHTML("beforeend", PAJAK_DPP.map(p => `
+  <div style="grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;border:1px solid var(--garis);border-radius:8px;padding:8px">
+    <label class="cek"><input type="checkbox" name="ada${p.id}"> ${p.label} ada</label>
+    <label>DPP (Rp)<input type="number" name="dpp${p.id}" min="0"></label>
+    <label>Tarif (%)<input type="number" name="tarif${p.id}" step="0.1" min="0" value="${p.tarif}"></label>
+    <label>${p.label} (Rp)<input type="text" id="tampil${p.id}" readonly></label>
+  </div>`).join(""));
+fieldWrap.addEventListener("input", () => PAJAK_DPP.forEach(p => hitungPajakTampil(p.id)));
+fieldWrap.addEventListener("change", () => PAJAK_DPP.forEach(p => hitungPajakTampil(p.id)));
+
+// Urutan tampilan mengikuti header Excel: kolom kiri turun ke bawah, lalu kolom kanan turun ke bawah
+const URUTAN = ["tanggal","noReg","penagih","jenis","ppk","noSpby","bruto","pph21","22","23","Ppn","keterangan","noKuitansi","sintag","pungut","setorSakti","registerBilling","tglSetor","registerBayar","tglBayar","uraian","kodeAkun","npwp","bupot","faktur"];
+function elemenUrutan(k) {
+  if (["22","23","Ppn"].includes(k)) return document.getElementById("tampil" + k).closest("div");
+  const el = form.elements[k];
+  return CEKLIS.some(([n]) => n === k) ? el.closest("label") : el.closest(".baris");
+}
+const kiri = document.createElement("div"), kanan = document.createElement("div");
+kiri.className = kanan.className = "kolom";
+const separuh = 11; // 11 item pertama di kolom kiri, sisanya di kanan
+URUTAN.forEach((k, i) => (i < separuh ? kiri : kanan).appendChild(elemenUrutan(k)));
+fieldWrap.innerHTML = "";
+fieldWrap.append(kiri, kanan);
+
+function hitungPajakTampil(id) {
+  const ada = form.elements["ada" + id].checked;
+  const dpp = angka(form.elements["dpp" + id].value);
+  const tarif = angka(form.elements["tarif" + id].value);
+  document.getElementById("tampil" + id).value = ada ? Math.round(dpp * tarif / 100) : 0;
+}
+
+function bacaForm() {
+  const fd = new FormData(form);
+  const r = {};
+  FIELD.forEach(([nama]) => r[nama] = fd.get(nama) || "");
+  CEKLIS.forEach(([nama]) => r[nama] = form.elements[nama].checked);
+  PAJAK_DPP.forEach(p => {
+    const ada = form.elements["ada" + p.id].checked;
+    r["ada" + p.id] = ada;
+    r["dpp" + p.id] = ada ? angka(form.elements["dpp" + p.id].value) : 0;
+    r["tarif" + p.id] = angka(form.elements["tarif" + p.id].value);
+    r[p.pajak] = ada ? Math.round(r["dpp" + p.id] * r["tarif" + p.id] / 100) : 0;
+  });
+  return r;
+}
+
+function isiForm(r) {
+  FIELD.forEach(([nama]) => form.elements[nama].value = r[nama] ?? "");
+  CEKLIS.forEach(([nama]) => form.elements[nama].checked = !!r[nama]);
+  PAJAK_DPP.forEach(p => {
+    const pajakLama = angka(r[p.pajak]);
+    const tarif = r["tarif" + p.id] ?? p.tarif;
+    const ada = r["ada" + p.id] ?? pajakLama > 0;
+    form.elements["ada" + p.id].checked = !!ada;
+    form.elements["tarif" + p.id].value = tarif;
+    form.elements["dpp" + p.id].value = r["dpp" + p.id] ?? (ada && pajakLama ? Math.round(pajakLama / (tarif / 100)) : "");
+    hitungPajakTampil(p.id);
+  });
+}
+
+function resetForm() {
+  form.reset();
+  PAJAK_DPP.forEach(p => hitungPajakTampil(p.id));
+  editId = null;
+  document.getElementById("judulForm").textContent = "Tambah SPJ";
+  document.getElementById("pesan").textContent = "";
+}
+
+form.addEventListener("submit", e => {
+  e.preventDefault();
+  const r = bacaForm();
+  if (!r.noReg.trim()) return tampilPesan("Nomor register wajib diisi.");
+  const duplikat = data.some(x => x.noReg === r.noReg && x.id !== editId);
+  if (duplikat) return tampilPesan("Nomor register " + r.noReg + " sudah ada. Periksa kembali.");
+  const sekarang = new Date().toLocaleString("id-ID");
+  if (editId) {
+    const lama = data.find(x => x.id === editId);
+    const catatan = perubahan(lama, r);
+    const riwayatBaru = catatan.map(t => ({ waktu: sekarang, catatan: t }));
+    data = data.map(x => x.id === editId
+      ? { ...r, id: editId, riwayat: [...(lama.riwayat || []), ...riwayatBaru] }
+      : x);
+  } else {
+    data.push({ ...r, id: Date.now(), riwayat: [{ waktu: sekarang, catatan: "SPJ dicatat" }] });
+  }
+  simpanData();
+  resetForm();
+  tampilkanSemua();
+  tampilPesan("Tersimpan.");
+});
+
+document.getElementById("btnBatal").addEventListener("click", resetForm);
+
+function tampilPesan(t) { document.getElementById("pesan").textContent = t; }
+
+/* =========================================================
+   TABEL, FILTER & RINGKASAN
+   ========================================================= */
+function isiFilterPPK() {
+  const sel = document.getElementById("filterPPK");
+  sel.innerHTML = '<option value="">Semua PPK</option>' + PPK.map(p => `<option>${p}</option>`).join("");
+}
+
+function dataTerfilter() {
+  const cari = document.getElementById("cari").value.toLowerCase();
+  const ppk = document.getElementById("filterPPK").value;
+  const jenis = document.getElementById("filterJenis").value;
+  const status = document.getElementById("filterStatus").value;
+  return data
+    .map(hitung)
+    .filter(r => !ppk || r.ppk === ppk)
+    .filter(r => !jenis || r.jenis === jenis)
+    .filter(r => !status || statusRecord(r) === status)
+    .filter(r => !cari || [r.penagih, r.noReg, r.uraian, r.noSpby].join(" ").toLowerCase().includes(cari))
+    .sort((a, b) => String(b.tanggal).localeCompare(String(a.tanggal)));
+}
+
+function tampilkanTabel(baris) {
+  const tbody = document.getElementById("tbody");
+  const sisa = hitungKas().sisa;
+  if (!baris.length) {
+    tbody.innerHTML = `<tr><td colspan="19" style="text-align:center;color:var(--redup);padding:20px">Belum ada data.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = baris.map((r, i) => {
+    const st = statusRecord(r);
+    const centang = CEKLIS.map(([n, kode]) => r[n] ? kode : "··").join(" ");
+    return `<tr>
+      <td>${i + 1}</td>
+      <td>${esc(r.tanggal)}</td>
+      <td>${esc(r.noReg)}</td>
+      <td>${esc(r.penagih)}</td>
+      <td>${esc(r.ppk)}</td>
+      <td>${esc(r.jenis)}</td>
+      <td class="angka">${rupiah(r.bruto)}</td>
+      <td class="angka">${rupiah(r.deposit)}</td>
+      <td class="angka">${rupiah(r.netto)}</td>
+      <td class="angka">${sisa[r.id] == null ? "-" : rupiah(sisa[r.id])}</td>
+      ${CEKLIS.map(([n]) => `<td class="centang">${r[n] ? "✓" : ""}</td>`).join("")}
+      <td><span class="status ${kelasStatus(st)}">${st}</span></td>
+      <td>
+        <button class="kecil" onclick="ubah(${r.id})">Ubah</button>
+        <button class="kecil" onclick="lihatRiwayat(${r.id})">Riwayat</button>
+        <button class="kecil bahaya" onclick="hapus(${r.id})">Hapus</button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function tampilkanRingkasan(baris) {
+  const total = k => baris.reduce((s, r) => s + angka(r[k]), 0);
+  const belumBupot = baris.filter(r => statusRecord(r) === "Belum Bupot").length;
+  const lunas = baris.filter(r => statusRecord(r) === "Lunas").length;
+  document.getElementById("ringkas").innerHTML = `
+    <div><small>Jumlah SPJ</small><b>${baris.length}</b></div>
+    <div><small>Total bruto</small><b>${rupiah(total("bruto"))}</b></div>
+    <div><small>Total pajak (deposit)</small><b>${rupiah(total("deposit"))}</b></div>
+    <div><small>Total netto dibayarkan</small><b>${rupiah(total("netto"))}</b></div>
+    <div><small>Belum bupot</small><b>${belumBupot}</b></div>
+    <div><small>Lunas</small><b>${lunas} / ${baris.length}</b></div>`;
+}
+
+function tampilkanSemua() {
+  tampilkanKas();
+  const baris = dataTerfilter();
+  tampilkanTabel(baris);
+  tampilkanRingkasan(baris);
+}
+
+["cari", "filterPPK", "filterJenis", "filterStatus"].forEach(id =>
+  document.getElementById(id).addEventListener("input", tampilkanSemua));
+
+window.ubah = id => {
+  const r = data.find(x => x.id === id);
+  if (!r) return;
+  isiForm(r);
+  editId = id;
+  document.getElementById("judulForm").textContent = "Ubah SPJ " + r.noReg;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
+const LABEL_CEKLIS = {bupot: "Bupot dibuat", faktur: "Faktur pajak dilaporkan", sintag: "Sudah di Sintag", pungut: "Pajak dipungut", setorSakti: "Pajak disetor (SAKTI)", registerBilling: "Pajak sudah disetor", registerBayar: "SPJ sudah dibayar"};
+
+// Membandingkan data lama dan baru, lalu menghasilkan daftar catatan perubahan
+function perubahan(lama, baru) {
+  const out = [];
+  FIELD.forEach(([n, label]) => {
+    const a = String(lama[n] ?? ""), b = String(baru[n] ?? "");
+    if (a !== b) out.push(`${label}: "${a || "-"}" → "${b || "-"}"`);
+  });
+  PAJAK_DPP.forEach(p => {
+    const a = String(lama["dpp" + p.id] ?? ""), b = String(baru["dpp" + p.id] ?? "");
+    if (a !== b) out.push(`DPP ${p.label}: "${a || "-"}" → "${b || "-"}"`);
+  });
+  Object.keys(LABEL_CEKLIS).forEach(n => {
+    if (!!lama[n] !== !!baru[n]) out.push(`${LABEL_CEKLIS[n]}: ${baru[n] ? "dicentang" : "centang dihapus"}`);
+  });
+  const stLama = statusRecord(lama), stBaru = statusRecord(baru);
+  if (stLama !== stBaru) out.push(`Status: ${stLama} → ${stBaru}`);
+  return out;
+}
+
+window.lihatRiwayat = id => {
+  const r = data.find(x => x.id === id);
+  if (!r) return;
+  const daftar = (r.riwayat || []).map(h => `<li><b>${esc(h.waktu)}</b>: ${esc(h.catatan)}</li>`).join("") || "<li>Belum ada riwayat.</li>";
+  const p = document.getElementById("panelRiwayat");
+  p.style.display = "block";
+  p.innerHTML = `<h3 style="margin:0 0 8px">Riwayat ${esc(r.noReg)} (${esc(r.penagih)})</h3>
+    <ol style="margin:0;padding-left:20px;line-height:1.7">${daftar}</ol>
+    <div class="bar"><button onclick="document.getElementById('panelRiwayat').style.display='none'">Tutup</button></div>`;
+  p.scrollIntoView({ behavior: "smooth" });
+};
+
+window.hapus = id => {
+  const r = data.find(x => x.id === id);
+  if (!r) return;
+  tampilKonfirmasi(`Hapus SPJ <b>${esc(r.noReg)}</b> (${esc(r.penagih)})? Data tidak bisa dikembalikan.`, () => {
+    data = data.filter(x => x.id !== id);
+    simpanData();
+    tampilkanSemua();
+  });
+};
+
+/* =========================================================
+   BACKUP: EKSPOR, IMPOR, CSV, PENGINGAT
+   ========================================================= */
+function unduh(nama, isi, tipe) {
+  const url = URL.createObjectURL(new Blob([isi], { type: tipe }));
+  const a = document.createElement("a");
+  a.href = url; a.download = nama; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function stempelWaktu() {
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
+document.getElementById("btnExport").addEventListener("click", () => {
+  unduh(`bku-${stempelWaktu()}.json`, JSON.stringify({ versi: 2, diekspor: new Date().toISOString(), data, gup }, null, 2), "application/json");
+  localStorage.setItem(KUNCI_EKSPOR, new Date().toISOString());
+  perbaruiBanner();
+});
+
+document.getElementById("fileImpor").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    const isi = JSON.parse(await file.text());
+    const baru = Array.isArray(isi) ? isi : isi.data;
+    if (!Array.isArray(baru) || baru.some(r => !r.noReg)) throw new Error("format tidak dikenali");
+    if (!confirm(`Impor ${baru.length} SPJ dan menggantikan data yang ada sekarang?`)) return;
+    data = baru;
+    if (isi.gup) gup = isi.gup;
+    simpanData();
+    tampilkanSemua();
+    tampilPesan("Impor berhasil.");
+  } catch (err) {
+    alert("File tidak valid: " + err.message);
+  }
+});
+
+/* =========================================================
+   IMPOR EXCEL (.xlsx): kolom dicocokkan berdasarkan nama header
+   ========================================================= */
+const norm = s => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const pad = n => String(n).padStart(2, "0");
+const bool = v => v === true || String(v).trim().toUpperCase() === "TRUE";
+
+function kunciKolom(h) {
+  const n = norm(h);
+  const tetap = {noregister: "noReg", penagih: "penagih", jenistagihan: "jenis", ppk: "ppk", nospby: "noSpby", nilaibruto: "bruto", pph21: "pph21", nokuitansi: "noKuitansi", keterangan: "keterangan", bupot: "bupot", fakturpajak: "faktur", sintag: "sintag", pungutpajaksakti: "pungut", registerbilling: "registerBilling", registerbayar: "registerBayar", tanggal: "tanggal", tanggalbayar: "tglBayar", setorpajak: "tglSetor", setorpajaksakti: "setorSakti"};
+  if (tetap[n]) return tetap[n];
+  if (n === "ppn") return "ppn";
+  if (/^dpp.*22$/.test(n)) return "dpp22";   // "DPP PPh 22" -> dpppph22
+  if (/^dpp.*23$/.test(n)) return "dpp23";   // "DPP PPh 23" -> dpppph23
+  if (n.endsWith("pph22") && !n.startsWith("dpp")) return "pph22";
+  if (n.endsWith("pph23") && !n.startsWith("dpp")) return "pph23";
+  return null; // kolom lain diabaikan (Deposit, Netto, Setor Pajak (Sakti), dll)
+}
+
+function angkaExcel(v) {
+  if (typeof v === "number") return Math.round(v);
+  return Number(String(v ?? "").replace(/[^\d-]/g, "")) || 0;
+}
+
+function tanggalExcel(v) {
+  if (v === "" || v == null) return "";
+  let y, m, d;
+  if (typeof v === "number") {
+    const t = new Date(Math.round((v - 25569) * 86400000));
+    y = t.getUTCFullYear(); m = t.getUTCMonth(); d = t.getUTCDate();
+  } else if (v instanceof Date) {
+    y = v.getFullYear(); m = v.getMonth(); d = v.getDate();
+  } else {
+    const s = String(v).trim();
+    const c = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    const t = c ? new Date(+c[3], +c[2] - 1, +c[1]) : new Date(s);
+    if (isNaN(t)) return "";
+    y = t.getFullYear(); m = t.getMonth(); d = t.getDate();
+  }
+  return `${y}-${pad(m + 1)}-${pad(d)}`;
+}
+
+function barisDariExcel(o) {
+  const p22 = angkaExcel(o.pph22), p23 = angkaExcel(o.pph23), pp = angkaExcel(o.ppn);
+  return {
+    id: Date.now() + Math.random(),
+    tanggal: tanggalExcel(o.tanggal), noReg: String(o.noReg ?? "").trim(),
+    penagih: String(o.penagih ?? "").trim(), npwp: "",
+    jenis: String(o.jenis ?? "").trim().toUpperCase(), ppk: String(o.ppk ?? "").trim(),
+    noSpby: String(o.noSpby ?? "").trim(), uraian: "", kodeAkun: "",
+    bruto: angkaExcel(o.bruto), pph21: angkaExcel(o.pph21),
+    pph22: p22, ada22: p22 > 0, dpp22: p22 ? (angkaExcel(o.dpp22) || Math.round(p22 / 0.015)) : 0, tarif22: 1.5,
+    pph23: p23, ada23: p23 > 0, dpp23: p23 ? (angkaExcel(o.dpp23) || Math.round(p23 / 0.02)) : 0, tarif23: 2,
+    ppn: pp, adaPpn: pp > 0, dppPpn: pp ? Math.round(pp / 0.12) : 0, tarifPpn: 12, // PPN memakai DPP nilai lain
+    noKuitansi: String(o.noKuitansi ?? "").trim(), kodeBilling: "",
+    tglSetor: tanggalExcel(o.tglSetor), tglBayar: tanggalExcel(o.tglBayar),
+    keterangan: String(o.keterangan ?? "").trim(),
+    bupot: bool(o.bupot), faktur: bool(o.faktur), sintag: bool(o.sintag), pungut: bool(o.pungut),
+    registerBilling: bool(o.registerBilling), registerBayar: bool(o.registerBayar), setorSakti: bool(o.setorSakti),
+    riwayat: [{ waktu: new Date().toLocaleString("id-ID"), catatan: "Diimpor dari Excel" }]
+  };
+}
+
+let imporTertunda = null;
+
+// Pesan impor ditampilkan di halaman, bukan lewat alert/confirm (sering diblokir di preview)
+function tampilImpor(html, galat = false) {
+  const p = document.getElementById("panelImpor");
+  p.style.display = "block";
+  p.style.borderLeft = galat ? "4px solid var(--merah)" : "4px solid var(--aksen)";
+  p.innerHTML = `<div>${html}</div><div class="bar"><button onclick="batalImpor()">Tutup</button></div>`;
+}
+
+let aksiKonfirmasi = null;
+
+// Konfirmasi di dalam halaman, tidak memakai dialog browser (sering diblokir di preview)
+function tampilKonfirmasi(pesan, aksi) {
+  aksiKonfirmasi = aksi;
+  document.getElementById("modalPesan").innerHTML = pesan;
+  document.getElementById("modalKonfirmasi").style.display = "flex";
+}
+
+function tutupKonfirmasi() {
+  aksiKonfirmasi = null;
+  document.getElementById("modalKonfirmasi").style.display = "none";
+}
+
+window.jalankanKonfirmasi = () => {
+  if (!aksiKonfirmasi) return;
+  const aksi = aksiKonfirmasi;
+  aksiKonfirmasi = null;
+  tutupKonfirmasi();
+  aksi();
+  tampilPesan("Data dihapus.");
+};
+
+window.terapkanImpor = () => {
+  if (!imporTertunda) return;
+  const { baru, perbarui } = imporTertunda;
+  const n = baru.length;
+  const waktu = new Date().toLocaleString("id-ID");
+  // SPJ yang sudah ada: data diganti dari Excel, riwayat tetap dipertahankan
+  data = data.map(x => {
+    const p = perbarui.find(y => y.noReg === x.noReg);
+    return p ? { ...x, ...p, id: x.id, riwayat: [...(x.riwayat || []), { waktu, catatan: "Diperbarui dari Excel" }] } : x;
+  });
+  data = [...data, ...baru];
+  imporTertunda = null;
+  simpanData();
+  tampilkanSemua();
+  batalImpor();
+  tampilPesan(n + " SPJ baru diimpor, " + perbarui.length + " diperbarui.");
+};
+
+window.batalImpor = () => {
+  imporTertunda = null;
+  const p = document.getElementById("panelImpor");
+  p.style.display = "none";
+  p.innerHTML = "";
+};
+
+document.getElementById("fileExcel").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  if (typeof XLSX === "undefined") return tampilImpor("Pustaka Excel belum termuat. Periksa koneksi internet, lalu muat ulang halaman.", true);
+  try {
+    const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "", raw: true });
+    const iHeader = rows.findIndex(r => r.some(c => norm(c) === "noregister"));
+    if (iHeader < 0) throw new Error("kolom No. Register tidak ditemukan");
+    const hdr = rows[iHeader], sub = rows[iHeader + 1] || [];
+    // Jika ada baris kedua sebagai sub-judul (PPh 21, PPh 22, ...), pakai nama dari baris itu
+    const pakaiSub = sub.some(c => /pph|ppn/i.test(String(c)));
+    const kolom = hdr.map((h, i) => kunciKolom(pakaiSub && norm(sub[i]) ? sub[i] : h));
+    const mulai = iHeader + (pakaiSub ? 2 : 1);
+    const sudahAda = new Set(data.map(x => String(x.noReg)));
+    const baru = [];
+    const perbarui = [];
+    let dobel = 0, kosong = 0;
+    rows.slice(mulai).forEach(row => {
+      const o = {};
+      kolom.forEach((k, i) => { if (k && o[k] === undefined) o[k] = row[i]; }); // ambil kolom pertama bila nama muncul berulang
+      const noReg = String(o.noReg ?? "").trim();
+      if (!noReg) { kosong++; return; }
+      if (baru.some(x => x.noReg === noReg)) { dobel++; return; }
+      if (sudahAda.has(noReg)) { perbarui.push(barisDariExcel(o)); return; }
+      baru.push(barisDariExcel(o));
+    });
+    if (!baru.length && !perbarui.length) return tampilImpor(`Tidak ada perubahan. ${dobel} baris duplikat, ${kosong} baris tanpa nomor register.`);
+    imporTertunda = { baru, perbarui };
+    tampilImpor(`<b>Terbaca ${baru.length} SPJ baru</b> dan <b>${perbarui.length} SPJ sudah ada</b> (akan diperbarui dari Excel). ${dobel} baris duplikat dan ${kosong} baris kosong dilewati.<br><small>Contoh baru: ${esc(baru.slice(0, 3).map(x => x.noReg + " " + x.penagih).join("; "))}</small><div class="bar" style="margin-top:10px"><button class="utama" onclick="terapkanImpor()">Terapkan (${baru.length} baru, ${perbarui.length} diperbarui)</button></div>`);
+  } catch (err) {
+    tampilImpor("Gagal membaca Excel: " + esc(err.message), true);
+  }
+});
+
+document.getElementById("btnCSV").addEventListener("click", () => {
+  const kolom = ["tanggal","noReg","penagih","npwp","jenis","ppk","noSpby","uraian","kodeAkun","bruto","pph21","pph22","pph23","ppn","deposit","netto","dpp22","dpp23","noKuitansi","tglSetor","tglBayar","keterangan"];
+  const baris = data.map(hitung).map(r => kolom.map(k => `"${String(r[k] ?? "").replace(/"/g, '""')}"`).join(","));
+  unduh(`bku-${stempelWaktu()}.csv`, "\uFEFF" + kolom.join(",") + "\n" + baris.join("\n"), "text/csv");
+});
+
+function perbaruiBanner() {
+  const b = document.getElementById("banner");
+  const terakhir = localStorage.getItem(KUNCI_EKSPOR);
+  const hari = terakhir ? (Date.now() - new Date(terakhir)) / 86400000 : Infinity;
+  if (!data.length) { b.style.display = "none"; return; }
+  if (hari > 7) {
+    b.style.display = "block";
+    b.textContent = terakhir
+      ? `Ekspor terakhir ${Math.floor(hari)} hari lalu. Buat cadangan JSON sekarang.`
+      : "Data belum pernah diekspor. Buat cadangan JSON sekarang.";
+  } else {
+    b.style.display = "none";
+  }
+}
+
+/* =========================================================
+   CONTOH DATA (untuk melihat tampilan)
+   ========================================================= */
+
+/* =========================================================
+   INISIALISASI
+   ========================================================= */
+isiFilterPPK();
+tampilkanSemua();
+perbaruiBanner();
+</script>
+<div id="modalKonfirmasi" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;align-items:center;justify-content:center">
+  <div style="background:var(--kartu);color:var(--teks);border-radius:6px;width:min(380px,90vw);box-shadow:0 10px 30px rgba(0,0,0,.25);overflow:hidden">
+    <div style="background:#e5e7eb;color:#1e293b;padding:8px 12px;font-weight:600;font-size:14px;border-bottom:1px solid var(--garis)">Konfirmasi</div>
+    <div style="padding:18px;display:flex;gap:12px;align-items:flex-start;font-size:14px">
+      <span style="color:#d97706;font-size:18px;line-height:1">&#9888;</span>
+      <div id="modalPesan"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:center;padding:0 14px 16px">
+      <button class="utama" onclick="jalankanKonfirmasi()">&#10003; Ya</button>
+      <button class="utama" onclick="tutupKonfirmasi()">&#10005; Tidak</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
