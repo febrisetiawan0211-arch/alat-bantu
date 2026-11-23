@@ -23,9 +23,7 @@
     font-family: Cambria, Georgia, serif;
     margin: 0; background: var(--latar); color: var(--teks); line-height: 1.5;
   }
-  button, input, select, textarea {
-    font-family: Cambria, Georgia, serif;
-  }
+  button, input, select, textarea { font-family: Cambria, Georgia, serif; }
 
   .wadah { display: flex; min-height: 100vh; }
 
@@ -71,6 +69,11 @@
     padding: 10px 12px; font-size: 14px; border: 1px solid var(--garis);
     border-radius: 10px; background: #fff; color: var(--teks);
   }
+  textarea {
+    width: 100%; min-height: 180px; padding: 12px 14px; font-size: 15px;
+    border: 1px solid var(--garis); border-radius: 10px; resize: vertical; outline: none;
+  }
+  textarea:focus { border-color: var(--aksen); box-shadow: 0 0 0 3px rgba(15,118,110,.15); }
 
   .bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .lebar { flex: 1; min-width: 200px; }
@@ -112,32 +115,28 @@
   .status.sukses { color: #15803d; }
   .status.gagal { color: var(--merah); }
 
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th {
-    text-align: left; font-weight: 600; color: var(--redup); font-size: 12px;
-    text-transform: uppercase; letter-spacing: .04em; padding: 10px 8px;
-    border-bottom: 2px solid var(--garis);
+  .label-mode { font-size: 14px; color: var(--redup); }
+
+  table.hasil-tabel { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.hasil-tabel th, table.hasil-tabel td {
+    border: 1px solid var(--garis); padding: 4px; text-align: left;
   }
-  td { padding: 6px 8px; border-bottom: 1px solid var(--garis); }
-  tbody tr:hover { background: #f8fffd; }
-  td.angka { text-align: right; }
-  tr.kosong { background: var(--merah-muda) !important; }
-  td input {
+  table.hasil-tabel th.nomor, table.hasil-tabel td.nomor { width: 40px; text-align: center; color: var(--redup); font-size: 12px; }
+  table.hasil-tabel th { background: #f1f5f9; font-weight: 600; }
+  table.hasil-tabel input {
     width: 100%; border: 1px solid transparent; padding: 6px 8px; font-size: 14px;
     background: transparent; border-radius: 6px; color: var(--teks);
   }
-  td input:hover { border-color: var(--garis); }
-  td input:focus { border-color: var(--aksen); background: #fff; outline: none; }
-  td.angka input { text-align: right; }
+  table.hasil-tabel input:hover { border-color: var(--garis); }
+  table.hasil-tabel input:focus { border-color: var(--aksen); background: #fff; outline: none; }
+  table.hasil-tabel tbody tr:hover { background: #f8fffd; }
 
   .kosong-tabel { text-align: center; color: var(--redup); padding: 24px; }
-
+  .aksi-tabel { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
   .ringkasan {
     display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
     background: var(--latar); border-radius: 12px; padding: 14px 18px; margin-top: 16px;
   }
-  .ringkasan b { font-size: 18px; color: var(--aksen-gelap); }
-  .ringkasan .peringatan { display: block; font-size: 13px; color: var(--merah); font-weight: normal; }
 
   @media (max-width: 760px) {
     .tombol-menu { display: block; }
@@ -195,8 +194,9 @@
     <section id="ocr" class="tab">
       <div class="judul-tab">
         <h2>Gambar ke Teks</h2>
-        <p>Salin gambar tabel, lalu tempel di sini. Data akan dibaca otomatis dan bisa diperbaiki langsung.</p>
+        <p>Tempel gambar, lalu hasilnya ditampilkan sebagai teks atau tabel. Anda bisa memperbaiki isinya langsung.</p>
       </div>
+
       <div class="kartu">
         <div class="zona" id="zonaTempel" tabindex="0">
           <span class="ikon-besar">📋</span>
@@ -205,32 +205,46 @@
         </div>
         <div class="bar">
           <input type="file" id="fileGambar" accept="image/*">
-          <button class="sekunder" id="btnTambahBaris">+ Tambah Baris</button>
-          <button class="sekunder" id="btnHapusSemua">Hapus Semua</button>
+          <span class="label-mode">Mode:</span>
+          <select id="modeOCR">
+            <option value="otomatis">Otomatis</option>
+            <option value="teks">Teks</option>
+            <option value="tabel">Tabel</option>
+          </select>
         </div>
         <div class="status" id="statusOCR">Belum ada gambar.</div>
       </div>
 
-      <div class="kartu">
-        <table>
-          <thead>
-            <tr>
-              <th style="width:50px">No</th>
-              <th>Nama Lengkap</th>
-              <th style="width:200px; text-align:right">Jumlah Bruto (Rp)</th>
-              <th style="width:50px"></th>
-            </tr>
-          </thead>
-          <tbody id="tbodyOCR"></tbody>
-        </table>
-        <div id="kosongOCR" class="kosong-tabel">Belum ada data.</div>
-
+      <!-- Hasil mode TEKS -->
+      <div class="kartu" id="kartuTeks" style="display:none">
+        <textarea id="areaTeks" placeholder="Hasil teks akan muncul di sini."></textarea>
         <div class="ringkasan">
-          <div>
-            <b id="totalOCR">Total: Rp0</b>
-            <span class="peringatan" id="peringatanOCR"></span>
-          </div>
-          <button class="utama" id="btnSalinExcel">Salin ke Excel</button>
+          <span class="label-mode">Teks bisa langsung diedit sebelum disalin.</span>
+          <button class="utama" id="btnSalinTeks">Salin teks</button>
+        </div>
+      </div>
+
+      <!-- Hasil mode TABEL -->
+      <div class="kartu" id="kartuTabel" style="display:none">
+        <div class="bar" style="margin-bottom:12px; justify-content:space-between">
+          <label class="label-mode">
+            <input type="checkbox" id="cekHeader" checked> Baris pertama sebagai judul kolom
+          </label>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="hasil-tabel">
+            <thead id="theadTabel"></thead>
+            <tbody id="tbodyTabel"></tbody>
+          </table>
+        </div>
+        <div id="kosongTabel" class="kosong-tabel" style="display:none">Belum ada data.</div>
+        <div class="aksi-tabel">
+          <button class="sekunder" id="btnTambahBaris">+ Tambah Baris</button>
+          <button class="sekunder" id="btnTambahKolom">+ Tambah Kolom</button>
+        </div>
+        <div class="ringkasan">
+          <span class="label-mode" id="infoTabel"></span>
+          <button class="utama" id="btnSalinTabel">Salin ke Excel</button>
         </div>
       </div>
     </section>
@@ -273,6 +287,10 @@ function salinTeks(teks) {
   document.execCommand("copy");
   document.body.removeChild(ta);
   return Promise.resolve();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
 
 /* =========================================================
@@ -359,7 +377,7 @@ function tampilkanHasil() {
   }
   hasilTerbilang.className = "hasil";
   hasilTerbilang.innerHTML =
-    formatTeks(teksAsli, formatSalin.value) + "<small>" + formatRp(nilaiTerbilang) + "</small>";
+    escapeHtml(formatTeks(teksAsli, formatSalin.value)) + "<small>" + formatRp(nilaiTerbilang) + "</small>";
 }
 
 function prosesTerbilang() {
@@ -376,8 +394,6 @@ function prosesTerbilang() {
 document.getElementById("btnTerbilang").addEventListener("click", prosesTerbilang);
 inputAngka.addEventListener("keydown", e => { if (e.key === "Enter") prosesTerbilang(); });
 inputAngka.addEventListener("input", prosesTerbilang);
-
-// Ganti format langsung terlihat di kotak hasil
 formatSalin.addEventListener("change", tampilkanHasil);
 
 btnSalinTerbilang.addEventListener("click", () => {
@@ -388,123 +404,258 @@ btnSalinTerbilang.addEventListener("click", () => {
 });
 
 /* =========================================================
-   OCR (Tesseract.js)
+   GAMBAR KE TEKS (Tesseract.js)
    ========================================================= */
-let baris = []; // { nama: string, bruto: number|null }
-const tbody = document.getElementById("tbodyOCR");
 const statusOCR = document.getElementById("statusOCR");
 const zona = document.getElementById("zonaTempel");
-const kosongOCR = document.getElementById("kosongOCR");
+const modeOCR = document.getElementById("modeOCR");
+const kartuTeks = document.getElementById("kartuTeks");
+const kartuTabel = document.getElementById("kartuTabel");
+const areaTeks = document.getElementById("areaTeks");
+const theadTabel = document.getElementById("theadTabel");
+const tbodyTabel = document.getElementById("tbodyTabel");
+const kosongTabel = document.getElementById("kosongTabel");
+const cekHeader = document.getElementById("cekHeader");
+const infoTabel = document.getElementById("infoTabel");
 
-function parseTeksOCR(teks) {
-  const hasil = [];
-  let namaSekarang = null;
-  const abaikan = /^(NIP|NPWP|NIK|Nama)\b/i;
-
-  for (const raw of teks.split("\n")) {
-    const line = raw.trim();
-    if (!line) continue;
-
-    const uang = line.match(/(\d{1,3}(?:[.\s]\d{3})+)\s*$/);
-    let namaBagian = line.replace(/\d[\d.\s]*$/, "").replace(/^[\s:.\-|]+|[\s:.\-|]+$/g, "");
-    namaBagian = namaBagian.replace(/^Nama\s*:?\s*/i, "").trim();
-
-    if (!abaikan.test(line) && /[A-Za-z]{3,}/.test(namaBagian)) {
-      namaSekarang = namaBagian;
-    }
-    if (uang && namaSekarang) {
-      hasil.push({ nama: namaSekarang, bruto: parseAngka(uang[1]) });
-      namaSekarang = null;
-    }
-  }
-  return hasil;
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-}
-
-function render() {
-  tbody.innerHTML = "";
-  baris.forEach((r, i) => {
-    const tr = document.createElement("tr");
-    if (r.bruto === null) tr.classList.add("kosong");
-    tr.innerHTML = `
-      <td>${i + 1}</td>
-      <td><input type="text" value="${escapeHtml(r.nama)}" data-i="${i}" data-f="nama"></td>
-      <td class="angka"><input type="text" value="${r.bruto === null ? "" : r.bruto}" data-i="${i}" data-f="bruto"></td>
-      <td><button class="hapus" data-hapus="${i}" title="Hapus baris">✕</button></td>`;
-    tbody.appendChild(tr);
-  });
-  kosongOCR.style.display = baris.length ? "none" : "block";
-  hitungTotal();
-}
-
-function hitungTotal() {
-  let total = 0, kosong = 0;
-  baris.forEach(r => { if (r.bruto === null) kosong++; else total += r.bruto; });
-  document.getElementById("totalOCR").textContent = "Total: " + formatRp(total);
-  document.getElementById("peringatanOCR").textContent =
-    kosong ? kosong + " baris belum punya nilai (ditandai merah)" : "";
-}
+let worker = null;     // worker Tesseract, dibuat sekali lalu dipakai ulang
+let adaHasil = false;  // sudah ada hasil OCR?
+let tabelData = [];    // array of array (sel berupa string), hasil yang bisa diedit
+let kolomTabel = 0;    // jumlah kolom tabel
 
 function setStatus(pesan, jenis = "") {
   statusOCR.className = "status " + jenis;
   statusOCR.textContent = pesan;
 }
 
-tbody.addEventListener("input", e => {
-  const el = e.target;
-  if (!el.dataset.f) return;
-  const i = Number(el.dataset.i);
-  if (el.dataset.f === "nama") {
-    baris[i].nama = el.value;
-  } else {
-    baris[i].bruto = parseAngka(el.value);
-    el.closest("tr").classList.toggle("kosong", baris[i].bruto === null);
-  }
-  hitungTotal();
-});
-
-tbody.addEventListener("click", e => {
-  const idx = e.target.dataset.hapus;
-  if (idx !== undefined) {
-    baris.splice(Number(idx), 1);
-    render();
-  }
-});
-
-document.getElementById("btnTambahBaris").addEventListener("click", () => {
-  baris.push({ nama: "", bruto: null });
-  render();
-});
-
-document.getElementById("btnHapusSemua").addEventListener("click", () => {
-  if (baris.length && confirm("Hapus semua baris?")) {
-    baris = [];
-    render();
-    setStatus("Semua baris dihapus.");
-  }
-});
-
-async function prosesGambar(file) {
-  setStatus("Membaca gambar... (pertama kali bisa lebih lama karena mengunduh data bahasa)");
-  try {
-    const { data: { text } } = await Tesseract.recognize(file, "ind+eng", {
+async function ambilWorker() {
+  if (!worker) {
+    worker = await Tesseract.createWorker("ind+eng", 1, {
       logger: m => {
         if (m.status === "recognizing text") {
           setStatus("Membaca gambar... " + Math.round(m.progress * 100) + "%");
         }
       }
     });
-    const hasil = parseTeksOCR(text);
-    if (!hasil.length) {
-      setStatus("Tidak ada data yang terbaca. Coba gambar yang lebih jelas.", "gagal");
+  }
+  return worker;
+}
+
+// Ambil daftar kata beserta posisinya (kotak pembatas)
+function ambilKata(data) {
+  if (data.words && data.words.length) return data.words;
+  const out = [];
+  (data.blocks || []).forEach(b =>
+    (b.paragraphs || []).forEach(p =>
+      (p.lines || []).forEach(l =>
+        (l.words || []).forEach(w => out.push(w))
+      )
+    )
+  );
+  return out;
+}
+
+function median(arr) {
+  if (!arr.length) return 0;
+  const s = [...arr].sort((a, b) => a - b);
+  const tengah = Math.floor(s.length / 2);
+  return s.length % 2 ? s[tengah] : (s[tengah - 1] + s[tengah]) / 2;
+}
+
+/* Kelompokkan kata menjadi baris, lalu pecah baris menjadi sel
+   berdasarkan jarak antarkata (jarak besar = pemisah kolom) */
+function buatTabel(kata) {
+  const kataValid = kata.filter(w => w.text && w.text.trim() && w.bbox);
+  if (!kataValid.length) return [];
+
+  const tinggi = median(kataValid.map(w => w.bbox.y1 - w.bbox.y0)) || 10;
+  const yTengah = w => (w.bbox.y0 + w.bbox.y1) / 2;
+
+  const urut = [...kataValid].sort((a, b) => yTengah(a) - yTengah(b));
+  const kelompok = [];
+  for (const w of urut) {
+    const terakhir = kelompok[kelompok.length - 1];
+    if (terakhir && Math.abs(yTengah(w) - terakhir.y) < tinggi * 0.6) {
+      terakhir.items.push(w);
+      terakhir.y = terakhir.items.reduce((s, k) => s + yTengah(k), 0) / terakhir.items.length;
+    } else {
+      kelompok.push({ y: yTengah(w), items: [w] });
+    }
+  }
+
+  return kelompok.map(b => {
+    const items = b.items.sort((a, c) => a.bbox.x0 - c.bbox.x0);
+    const sel = [];
+    let cur = null;
+    for (const w of items) {
+      if (cur && w.bbox.x0 - cur.x1 <= tinggi * 0.9) {
+        cur.teks.push(w.text.trim());
+        cur.x1 = w.bbox.x1;
+      } else {
+        cur = { teks: [w.text.trim()], x1: w.bbox.x1 };
+        sel.push(cur);
+      }
+    }
+    return sel.map(c => c.teks.join(" "));
+  });
+}
+
+// Mode otomatis: jika mayoritas baris punya 2 kolom atau lebih, anggap tabel
+function apakahTabel(baris) {
+  if (baris.length < 2) return false;
+  const banyakKolom = baris.filter(r => r.length >= 2).length;
+  return banyakKolom / baris.length >= 0.5;
+}
+
+function samakanKolom(data) {
+  const maks = Math.max(1, ...data.map(r => r.length));
+  return data.map(r => {
+    const salinan = [...r];
+    while (salinan.length < maks) salinan.push("");
+    return salinan;
+  });
+}
+
+function tampilkanOCR() {
+  const mode = modeOCR.value;
+  const pakaiTabel = mode === "tabel" || (mode === "otomatis" && apakahTabel(tabelData));
+
+  kartuTeks.style.display = (!pakaiTabel && adaHasil) ? "block" : "none";
+  kartuTabel.style.display = (pakaiTabel && adaHasil) ? "block" : "none";
+  if (!adaHasil) return;
+
+  if (pakaiTabel) renderTabel();
+  else areaTeks.value = teksDariTabel();
+}
+
+// Teks biasa dibentuk dari baris-baris tabel agar mode teks tetap konsisten
+function teksDariTabel() {
+  return tabelData.map(r => r.join("  ")).join("\n");
+}
+
+function renderTabel() {
+  kolomTabel = Math.max(1, ...tabelData.map(r => r.length));
+  tabelData = samakanKolom(tabelData);
+  const adaJudul = cekHeader.checked && tabelData.length > 0;
+
+  // Header
+  let htmlHead = "<tr><th class='nomor'>No</th>";
+  for (let c = 0; c < kolomTabel; c++) {
+    if (adaJudul) {
+      const nilai = tabelData[0][c];
+      htmlHead += `<th><input type="text" value="${escapeHtml(nilai)}" data-r="0" data-c="${c}"></th>`;
+    } else {
+      htmlHead += `<th>Kolom ${c + 1}</th>`;
+    }
+  }
+  htmlHead += "<th style='width:36px'></th></tr>";
+  theadTabel.innerHTML = htmlHead;
+
+  // Isi
+  const mulai = adaJudul ? 1 : 0;
+  let htmlBody = "";
+  for (let r = mulai; r < tabelData.length; r++) {
+    htmlBody += `<tr><td class="nomor">${r - mulai + 1}</td>`;
+    for (let c = 0; c < kolomTabel; c++) {
+      htmlBody += `<td><input type="text" value="${escapeHtml(tabelData[r][c])}" data-r="${r}" data-c="${c}"></td>`;
+    }
+    htmlBody += `<td><button class="hapus" data-hapus="${r}" title="Hapus baris">✕</button></td></tr>`;
+  }
+  tbodyTabel.innerHTML = htmlBody;
+
+  kosongTabel.style.display = tabelData.length ? "none" : "block";
+  const jumlahBaris = Math.max(0, tabelData.length - (adaJudul ? 1 : 0));
+  infoTabel.textContent = jumlahBaris + " baris, " + kolomTabel + " kolom";
+}
+
+function bentukTSV() {
+  const adaJudul = cekHeader.checked;
+  return tabelData.map(r => r.map(s => String(s).replace(/[\t\n]/g, " ")).join("\t")).join("\n");
+}
+
+// Edit sel tabel langsung di data, tanpa render ulang agar fokus tidak hilang
+tbodyTabel.addEventListener("input", e => {
+  const el = e.target;
+  if (el.dataset.r === undefined) return;
+  tabelData[Number(el.dataset.r)][Number(el.dataset.c)] = el.value;
+});
+theadTabel.addEventListener("input", e => {
+  const el = e.target;
+  if (el.dataset.r === undefined) return;
+  tabelData[Number(el.dataset.r)][Number(el.dataset.c)] = el.value;
+});
+
+tbodyTabel.addEventListener("click", e => {
+  const idx = e.target.dataset.hapus;
+  if (idx !== undefined) {
+    tabelData.splice(Number(idx), 1);
+    renderTabel();
+  }
+});
+
+cekHeader.addEventListener("change", renderTabel);
+
+document.getElementById("btnTambahBaris").addEventListener("click", () => {
+  if (!adaHasil) { adaHasil = true; kartuTabel.style.display = "block"; }
+  tabelData.push(Array(Math.max(1, kolomTabel)).fill(""));
+  renderTabel();
+});
+
+document.getElementById("btnTambahKolom").addEventListener("click", () => {
+  if (!adaHasil) { adaHasil = true; kartuTabel.style.display = "block"; }
+  if (!tabelData.length) tabelData.push([""]);
+  tabelData = tabelData.map(r => [...r, ""]);
+  renderTabel();
+});
+
+modeOCR.addEventListener("change", tampilkanOCR);
+
+// Edit teks langsung, lalu simpan ke data agar konsisten saat disalin
+areaTeks.addEventListener("input", () => {
+  tabelData = areaTeks.value.split("\n").map(baris => [baris]);
+});
+
+document.getElementById("btnSalinTeks").addEventListener("click", async () => {
+  try {
+    await salinTeks(areaTeks.value);
+    setStatus("Teks disalin.", "sukses");
+  } catch (err) {
+    setStatus("Gagal menyalin: " + err.message, "gagal");
+  }
+});
+
+document.getElementById("btnSalinTabel").addEventListener("click", async () => {
+  if (!tabelData.length) { setStatus("Belum ada data untuk disalin.", "gagal"); return; }
+  const judul = cekHeader.checked ? "" : "";
+  try {
+    await salinTeks(bentukTSV());
+    setStatus("Tabel disalin. Tempel di Excel dengan Ctrl+V.", "sukses");
+  } catch (err) {
+    setStatus("Gagal menyalin: " + err.message, "gagal");
+  }
+});
+
+async function prosesGambar(file) {
+  setStatus("Membaca gambar... (pertama kali bisa lebih lama karena mengunduh data bahasa)");
+  try {
+    const w = await ambilWorker();
+    const { data } = await w.recognize(file);
+    const kata = ambilKata(data);
+    const baris = buatTabel(kata);
+
+    if (!baris.length && !(data.text || "").trim()) {
+      setStatus("Tidak ada teks yang terbaca. Coba gambar yang lebih jelas.", "gagal");
       return;
     }
-    hasil.forEach(h => baris.push(h));
-    render();
-    setStatus(hasil.length + " baris berhasil ditambahkan. Periksa lalu salin ke Excel.", "sukses");
+
+    // Jika kata tidak punya posisi, gunakan teks mentah per baris
+    tabelData = baris.length ? baris : (data.text || "").split("\n").filter(s => s.trim()).map(s => [s.trim()]);
+    adaHasil = true;
+    tampilkanOCR();
+
+    const bentuk = modeOCR.value === "tabel" || (modeOCR.value === "otomatis" && apakahTabel(tabelData))
+      ? "tabel" : "teks";
+    setStatus(tabelData.length + " baris terbaca sebagai " + bentuk + ". Periksa lalu salin.", "sukses");
   } catch (err) {
     setStatus("Gagal membaca gambar: " + err.message, "gagal");
   }
@@ -529,18 +680,6 @@ document.addEventListener("paste", e => {
 });
 
 zona.addEventListener("click", () => zona.focus());
-
-document.getElementById("btnSalinExcel").addEventListener("click", async () => {
-  if (!baris.length) { setStatus("Belum ada data untuk disalin.", "gagal"); return; }
-  const lines = ["Nama Lengkap\tJumlah Bruto (Rp)"];
-  baris.forEach(r => lines.push(r.nama + "\t" + (r.bruto === null ? "" : r.bruto)));
-  try {
-    await salinTeks(lines.join("\n"));
-    setStatus("Tabel disalin. Tempel di Excel dengan Ctrl+V.", "sukses");
-  } catch (err) {
-    setStatus("Gagal menyalin: " + err.message, "gagal");
-  }
-});
 </script>
 </body>
 </html>
