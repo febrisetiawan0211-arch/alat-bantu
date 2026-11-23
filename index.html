@@ -586,7 +586,7 @@ function buatTabel(kata, faktor) {
 
 /* =========================================================
    MODE PPh 21 FINAL - SBPEP
-   - Orang dikenali dari baris yang memuat 3 nilai rupiah atau lebih
+   - Orang dikenali dari baris yang memuat 2 nilai rupiah atau lebih
    - Bruto: cariBruto() memakai tarif PPh umum (0%, 5%, 15%, dst.)
    - Nama: teks paling dekat di sekitar baris tersebut
    - NPWP: setiap NPWP dipasangkan ke baris orang terdekat,
@@ -627,27 +627,22 @@ function parseSBPEP(data) {
   const rxNama = /^[A-Za-z][A-Za-z.' ]{4,}$/;
   const rxLabel = /\b(NIP|NPWP|NIK|JABATAN|TANGGAL|TARIF|BRUTO|NETO|TIM|ANGGOTA|KETUA|SUB|AGUSTUS|HARI|GOL|TGL)\b/i;
 
-  // 1. Baris data: baris yang memuat minimal 3 nilai rupiah (baris JUMLAH dilewati)
+  // 1. Baris data: baris yang memuat minimal 2 nilai rupiah (baris JUMLAH dilewati)
   const barisData = [];
   garis.forEach((t, i) => {
     if (/JUMLAH/i.test(t)) return;
     const nilai = t.match(rxUang) || [];
-    if (nilai.length >= 3) barisData.push(i);
+    if (nilai.length >= 2) barisData.push(i);
   });
 
-  // 2. Kumpulkan kandidat NPWP beserta posisi barisnya
+  // 2. Kumpulkan kandidat NPWP (angka 12-16 digit) dari SEMUA baris.
+  // Spasi, titik, dan strip di antara digit dihapus dulu agar angka
+  // yang terpisah oleh OCR tetap tersambung. Angka 18 digit (NIP) diabaikan.
   const kandidatNpwp = [];
   garis.forEach((t, j) => {
-    const m = t.match(/NPWP\s*[:.]?\s*([\d.\-\s]{10,})/i);
-    if (m) {
-      const v = m[1].replace(/\D/g, "");
-      if (v.length >= 12) kandidatNpwp.push({ j, v });
-      return;
-    }
-    // Cadangan: angka 15-16 digit, termasuk baris NIK (NPWP sering sama dengan NIK)
-    const tanpaSpasi = t.replace(/(?<=\d)\s+(?=\d)/g, "");
-    const m2 = tanpaSpasi.match(/(?<!\d)\d{15,16}(?!\d)/);
-    if (m2) kandidatNpwp.push({ j, v: m2[0] });
+    const bersih = t.replace(/(?<=\d)[\s.\-](?=\d)/g, "");
+    const cocok = bersih.match(/(?<!\d)\d{12,16}(?!\d)/g) || [];
+    cocok.forEach(v => kandidatNpwp.push({ j, v, panjang: v.length }));
   });
 
   // 3. Pasangkan NPWP dengan orang terdekat (jarak terpendek lebih dulu),
@@ -675,6 +670,8 @@ function parseSBPEP(data) {
     // Bruto
     const angka = (garis[i].match(rxUang) || []).map(s => parseAngka(s));
     let bruto = cariBruto(angka);
+    // Jika hanya 2 nilai (tarif dan bruto), bruto adalah yang lebih besar
+    if (bruto === null && angka.length === 2) bruto = Math.max(...angka);
     // Cadangan: urutan kiri ke kanan adalah tarif, bruto, PPh, neto
     if (bruto === null && angka.length >= 2) bruto = angka[1];
 
@@ -684,7 +681,7 @@ function parseSBPEP(data) {
     for (let j = i; j >= Math.max(batasAtas, i - 5); j--) urutanCari.push(j);
     for (let j = i + 1; j <= Math.min(batasBawah, i + 2); j++) urutanCari.push(j);
     for (const j of urutanCari) {
-      const c = garis[j].replace(/^[\d\s.|_:]+/, "").replace(/[|_]/g, "").trim();
+      const c = garis[j].replace(/^[\d\s.|_:]+/, "").replace(/[|_]/g, "").replace(/[^A-Za-z]+$/, "").trim();
       if (rxNama.test(c) && !rxLabel.test(c)) { nama = c; break; }
     }
 
