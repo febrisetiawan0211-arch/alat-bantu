@@ -587,35 +587,16 @@ function buatTabel(kata, faktor) {
 /* =========================================================
    MODE PPh 21 FINAL - SBPEP
    - Orang dikenali dari baris yang memuat 2 nilai rupiah atau lebih
-   - Bruto: cariBruto() memakai tarif PPh umum (0%, 5%, 15%, dst.)
+   - Bruto (Opsi A): nilai terbesar di baris tersebut
    - Nama: teks paling dekat di sekitar baris tersebut
    - NPWP: setiap NPWP dipasangkan ke baris orang terdekat,
      dan satu NPWP hanya boleh dipakai satu kali
    ========================================================= */
 
-// Tarif PPh 21 yang umum dipakai pada dokumen ini (0% ditangani terpisah)
-const TARIF_PPH = [0.05, 0.06, 0.15, 0.25, 0.30];
-
-/* Bruto = PPh + neto.
-   - PPh 0%: bruto dan neto sama, jadi nilai bruto muncul dua kali.
-   - PPh > 0%: cari nilai yang punya pasangan PPh dengan tarif umum,
-     dan selisihnya (neto) juga ada di baris yang sama. */
+/* Bruto = nilai terbesar di baris (lebih besar dari tarif, PPh, dan neto) */
 function cariBruto(angka) {
-  const ganda = angka.filter((v, i) => angka.indexOf(v) !== i);
-  if (ganda.length) return Math.max(...ganda);
-
-  let cadangan = null;
-  for (const v of angka) {
-    for (const p of angka) {
-      if (p >= v) continue;
-      const rasio = p / v;
-      if (!TARIF_PPH.some(r => Math.abs(rasio - r) < 0.005)) continue;
-      const neto = v - p;
-      if (angka.some(n => Math.abs(n - neto) <= v * 0.005)) return v;
-      if (cadangan === null) cadangan = v;
-    }
-  }
-  return cadangan;
+  if (!angka.length) return null;
+  return Math.max(...angka);
 }
 
 function parseSBPEP(data) {
@@ -667,13 +648,9 @@ function parseSBPEP(data) {
     const batasAtas = k > 0 ? barisData[k - 1] + 1 : 0;
     const batasBawah = k + 1 < barisData.length ? barisData[k + 1] - 1 : garis.length - 1;
 
-    // Bruto
+    // Bruto: nilai terbesar di baris
     const angka = (garis[i].match(rxUang) || []).map(s => parseAngka(s));
-    let bruto = cariBruto(angka);
-    // Jika hanya 2 nilai (tarif dan bruto), bruto adalah yang lebih besar
-    if (bruto === null && angka.length === 2) bruto = Math.max(...angka);
-    // Cadangan: urutan kiri ke kanan adalah tarif, bruto, PPh, neto
-    if (bruto === null && angka.length >= 2) bruto = angka[1];
+    const bruto = cariBruto(angka);
 
     // Nama: cari ke atas dulu (paling dekat), lalu ke bawah, tanpa keluar dari wilayah orang ini
     let nama = "";
