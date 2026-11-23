@@ -11,7 +11,6 @@
     --aksen-gelap: #0b5a54;
     --aksen-muda: #ecfdf5;
     --latar: #f8fafc;
-    --sidebar: #ffffff;
     --teks: #1e293b;
     --redup: #64748b;
     --garis: #e2e8f0;
@@ -24,12 +23,14 @@
     font-family: Cambria, Georgia, serif;
     margin: 0; background: var(--latar); color: var(--teks); line-height: 1.5;
   }
-  button, input, select { font-family: inherit; }
+  button, input, select, textarea {
+    font-family: Cambria, Georgia, serif;
+  }
 
   .wadah { display: flex; min-height: 100vh; }
 
   .sidebar {
-    width: var(--lebar-sidebar); background: var(--sidebar);
+    width: var(--lebar-sidebar); background: #fff;
     border-right: 1px solid var(--garis); padding: 20px 14px;
     position: sticky; top: 0; height: 100vh; flex-shrink: 0; transition: transform .2s;
   }
@@ -60,7 +61,6 @@
     background: #fff; border-radius: 16px; padding: 24px; margin-bottom: 18px;
     box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 18px rgba(0,0,0,.05);
   }
-  .kartu h3 { margin: 0 0 12px; font-size: 16px; }
 
   input[type=text] {
     padding: 12px 14px; font-size: 15px; border: 1px solid var(--garis);
@@ -73,7 +73,6 @@
   }
 
   .bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  .bar.kanan { justify-content: space-between; }
   .lebar { flex: 1; min-width: 200px; }
 
   button.utama {
@@ -176,7 +175,7 @@
       </div>
       <div class="kartu">
         <div class="bar">
-          <input type="text" id="inputAngka" class="lebar" placeholder="Contoh: 480.000">
+          <input type="text" id="inputAngka" class="lebar" placeholder="Contoh: 480000">
           <button class="utama" id="btnTerbilang">Ubah</button>
         </div>
         <div class="hasil kosong" id="hasilTerbilang">Hasil akan muncul di sini.</div>
@@ -277,6 +276,29 @@ function salinTeks(teks) {
 }
 
 /* =========================================================
+   FORMAT RUPIAH & TEKS
+   ========================================================= */
+function parseAngka(teks) {
+  const digit = (teks || "").replace(/[^\d]/g, "");
+  return digit ? parseInt(digit, 10) : null;
+}
+
+function formatRp(n) {
+  return "Rp" + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+function formatTeks(teks, jenis) {
+  if (jenis === "upper") return teks.toUpperCase();
+  if (jenis === "lower") return teks.toLowerCase();
+  if (jenis === "capitalize") {
+    return teks.toLowerCase().split(" ").map(kata =>
+      kata.charAt(0).toUpperCase() + kata.slice(1)
+    ).join(" ");
+  }
+  return teks;
+}
+
+/* =========================================================
    TERBILANG
    ========================================================= */
 const SATUAN = ["", "satu", "dua", "tiga", "empat", "lima", "enam", "tujuh", "delapan", "sembilan"];
@@ -322,55 +344,47 @@ function terbilang(n) {
   return n < 0 ? "minus " + bagian(-n) : bagian(n);
 }
 
-function parseAngka(teks) {
-  const digit = (teks || "").replace(/[^\d]/g, "");
-  return digit ? parseInt(digit, 10) : null;
-}
-
-function formatRp(n) {
-  return "Rp" + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-}
-
-function formatTeks(teks, jenis) {
-  if (jenis === "upper") return teks.toUpperCase();
-  if (jenis === "lower") return teks.toLowerCase();
-  if (jenis === "capitalize") {
-    return teks.toLowerCase().split(" ").map(kata =>
-      kata.charAt(0).toUpperCase() + kata.slice(1)
-    ).join(" ");
-  } 
-  return teks;
-}
-
 const inputAngka = document.getElementById("inputAngka");
 const hasilTerbilang = document.getElementById("hasilTerbilang");
-let teksTerbilang = "";
+const formatSalin = document.getElementById("formatSalin");
+const btnSalinTerbilang = document.getElementById("btnSalinTerbilang");
+let teksAsli = "";
+let nilaiTerbilang = null;
 
-function prosesTerbilang() {
-  const n = parseAngka(inputAngka.value);
-  if (n === null) {
-    teksTerbilang = "";
+function tampilkanHasil() {
+  if (nilaiTerbilang === null) {
     hasilTerbilang.className = "hasil kosong";
     hasilTerbilang.textContent = "Hasil akan muncul di sini.";
     return;
   }
-  const kata = terbilang(n);
-  teksTerbilang = kata.charAt(0).toUpperCase() + kata.slice(1) + " rupiah";
   hasilTerbilang.className = "hasil";
-  hasilTerbilang.innerHTML = teksTerbilang + "<small>" + formatRp(n) + "</small>";
+  hasilTerbilang.innerHTML =
+    formatTeks(teksAsli, formatSalin.value) + "<small>" + formatRp(nilaiTerbilang) + "</small>";
+}
+
+function prosesTerbilang() {
+  nilaiTerbilang = parseAngka(inputAngka.value);
+  if (nilaiTerbilang === null) {
+    teksAsli = "";
+  } else {
+    const kata = terbilang(nilaiTerbilang);
+    teksAsli = kata.charAt(0).toUpperCase() + kata.slice(1) + " rupiah";
+  }
+  tampilkanHasil();
 }
 
 document.getElementById("btnTerbilang").addEventListener("click", prosesTerbilang);
 inputAngka.addEventListener("keydown", e => { if (e.key === "Enter") prosesTerbilang(); });
 inputAngka.addEventListener("input", prosesTerbilang);
 
-document.getElementById("btnSalinTerbilang").addEventListener("click", () => {
-  if (!teksTerbilang) return;
-  const jenis = document.getElementById("formatSalin").value;
-  salinTeks(formatTeks(teksTerbilang, jenis));
-  const tombol = document.getElementById("btnSalinTerbilang");
-  tombol.textContent = "Tersalin!";
-  setTimeout(() => (tombol.textContent = "Salin hasil"), 1500);
+// Ganti format langsung terlihat di kotak hasil
+formatSalin.addEventListener("change", tampilkanHasil);
+
+btnSalinTerbilang.addEventListener("click", () => {
+  if (!teksAsli) return;
+  salinTeks(formatTeks(teksAsli, formatSalin.value));
+  btnSalinTerbilang.textContent = "Tersalin!";
+  setTimeout(() => (btnSalinTerbilang.textContent = "Salin hasil"), 1500);
 });
 
 /* =========================================================
