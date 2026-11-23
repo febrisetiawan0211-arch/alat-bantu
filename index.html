@@ -551,66 +551,76 @@ function buatTabel(kata, faktor) {
 
 /* =========================================================
    MODE PPh 21 FINAL - SBPEP
-   Setiap orang diawali label NIP. Dari blok itu diambil:
-   - Nama: baris teks paling dekat di atas label NIP
-   - NPWP: nilai setelah label NPWP
-   - Bruto: nilai rupiah yang jika dikurangi PPh 5% menghasilkan neto
+   Setiap orang dikenali dari baris yang memuat 3 nilai rupiah
+   atau lebih (tarif, bruto, PPh, neto). Dari baris itu diambil:
+   - Bruto: nilai yang jika dikurangi PPh 5% sama dengan neto
+   - Nama: teks paling dekat di atas/bawah baris tersebut
+   - NPWP: angka setelah label NPWP, atau angka 15 digit
    ========================================================= */
 function parseSBPEP(data) {
   const garis = (data.lines && data.lines.length)
     ? data.lines.map(l => l.text.trim())
     : (data.text || "").split("\n").map(s => s.trim());
 
-  const rxNip = /\bNIP\b/i;
-  const rxNpwp = /NPWP\s*[:.]?\s*([\d.\-\s]{8,})/i;
   const rxUang = /\d{1,3}(?:\.\d{3})+/g;
   const rxNama = /^[A-Za-z][A-Za-z.' ]{4,}$/;
-  const rxLabel = /(NIP|NPWP|NIK|JABATAN|TANGGAL|TARIF|BRUTO|NETO|Ketua|Anggota|Tim|Agustus)/i;
+  const rxLabel = /\b(NIP|NPWP|NIK|JABATAN|TANGGAL|TARIF|BRUTO|NETO|TIM|ANGGOTA|KETUA|SUB|AGUSTUS|HARI|GOL|TGL)\b/i;
 
-  // Posisi setiap label NIP menandai awal satu orang
-  const awal = [];
-  garis.forEach((t, i) => { if (rxNip.test(t)) awal.push(i); });
+  // Baris data: baris yang memuat minimal 3 nilai rupiah
+  const barisData = [];
+  garis.forEach((t, i) => {
+    const nilai = t.match(rxUang) || [];
+    if (nilai.length >= 3) barisData.push(i);
+  });
 
   const hasil = [];
-  awal.forEach((mulai, k) => {
-    const sebelumnya = k > 0 ? awal[k - 1] + 1 : 0;
-    const selesai = k + 1 < awal.length ? awal[k + 1] : garis.length;
 
-    // 1. Nama: cari mundur dari label NIP, maksimal 2 baris
-    let nama = "";
-    for (let j = mulai; j >= Math.max(0, mulai - 2) && !nama; j--) {
-      const c = garis[j].replace(/^\d{1,2}\s+/, "").replace(/[|_]/g, "").trim();
-      if (rxNama.test(c) && !rxLabel.test(c)) nama = c;
-    }
-    if (!nama) return;
+  barisData.forEach((i, k) => {
+    // Batas wilayah orang ini: tidak boleh melewati baris data orang lain
+    const batasAtas = k > 0 ? barisData[k - 1] + 1 : 0;
+    const batasBawah = k + 1 < barisData.length ? barisData[k + 1] - 1 : garis.length - 1;
 
-    // 2. NPWP: cari di blok orang ini
-    let npwp = "";
-    for (let j = sebelumnya; j < selesai && !npwp; j++) {
-      const m = garis[j].match(rxNpwp);
-      if (m) npwp = m[1].replace(/\s/g, "");
-    }
-
-    // 3. Bruto: kumpulkan nilai rupiah dari baris blok (abaikan baris label)
-    const kandidat = [];
-    for (let j = sebelumnya; j < selesai; j++) {
-      if (/(NIP|NPWP|NIK)/i.test(garis[j])) continue;
-      const cocok = garis[j].match(rxUang) || [];
-      cocok.forEach(s => kandidat.push(parseAngka(s)));
-    }
-
+    // 1. Bruto: nilai yang pasangan netonya (bruto - PPh 5%) juga ada di baris ini
+    const angka = (garis[i].match(rxUang) || []).map(s => parseAngka(s));
     let bruto = null;
-    for (const b of kandidat) {
-      const pph = Math.round(b * 0.05);
-      const neto = b - pph;
-      if (kandidat.includes(neto)) { bruto = b; break; }
+    for (const b of angka) {
+      const neto = b - Math.round(b * 0.05);
+      if (angka.includes(neto)) { bruto = b; break; }
     }
-    // Cadangan: jika tidak ada pasangan bruto-neto yang cocok, ambil nilai terbesar kedua
-    if (bruto === null && kandidat.length >= 2) {
-      bruto = [...kandidat].sort((a, b) => b - a)[1];
+    // Cadangan: urutan kiri ke kanan adalah tarif, bruto, PPh, neto
+    if (bruto === null && angka.length >= 2) bruto = angka[1];
+
+    // 2. Nama: cari ke atas dulu (paling dekat), lalu ke bawah
+    let nama = "";
+    const urutanCari = [];
+    for (let j = i; j >= Math.max(batasAtas, i - 5); j--) urutanCari.push(j);
+    for (let j = i + 1; j <= Math.min(batasBawah, i + 2); j++) urutanCari.push(j);
+    for (const j of urutanCari) {
+      const c = garis[j].replace(/^[\d\s.|_:]+/, "").replace(/[|_]/g, "").trim();
+      if (rxNama.test(c) && !rxLabel.test(c)) { nama = c; break; }
     }
 
-    hasil.push([nama, npwp, bruto === null ? "" : String(bruto)]);
+    // 3. NPWP: cari label NPWP di sekitar baris, ambil angka setelahnya
+    let npwp = "";
+    const awalCari = Math.max(batasAtas, i - 5);
+    const akhirCari = Math.min(batasBawah, i + 3);
+    for (let j = awalCari; j <= akhirCari && !npwp; j++) {
+      const m = garis[j].match(/NPWP\s*[:.]?\s*([\d.\-\s]{10,})/i);
+      if (m) npwp = m[1].replace(/\D/g, "");
+    }
+    // Cadangan: angka tepat 15 digit (format NPWP), bukan NIP (18) atau NIK (16)
+    if (!npwp) {
+      for (let j = awalCari; j <= akhirCari && !npwp; j++) {
+        const m = garis[j].match(/(?<!\d)\d{15}(?!\d)/);
+        if (m) npwp = m[0];
+      }
+    }
+
+    hasil.push([
+      nama || "(nama tidak terbaca)",
+      npwp,
+      bruto === null ? "" : String(bruto)
+    ]);
   });
 
   return hasil;
