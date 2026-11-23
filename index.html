@@ -180,7 +180,15 @@
           <button class="utama" id="btnTerbilang">Ubah</button>
         </div>
         <div class="hasil kosong" id="hasilTerbilang">Hasil akan muncul di sini.</div>
-        <div class="bar" style="margin-top:14px">
+        <div class="bar" style="margin-top:14px; align-items:center">
+  <select id="formatSalin" style="padding:10px 12px; border:1px solid var(--garis); border-radius:10px; font-size:14px; background:#fff">
+    <option value="asli">Format asli (Kalimat)</option>
+    <option value="upper">UPPERCASE</option>
+    <option value="capitalize">Capitalize Each Word</option>
+    <option value="lower">lowercase</option>
+  </select>
+  <button class="sekunder" id="btnSalinTerbilang">Salin hasil</button>
+</div>
           <button class="sekunder" id="btnSalinTerbilang">Salin hasil</button>
         </div>
       </div>
@@ -330,7 +338,23 @@ function prosesTerbilang() {
 document.getElementById("btnTerbilang").addEventListener("click", prosesTerbilang);
 inputAngka.addEventListener("keydown", e => { if (e.key === "Enter") prosesTerbilang(); });
 inputAngka.addEventListener("input", prosesTerbilang);
+function formatTeks(teks, jenis) {
+  if (jenis === "upper") return teks.toUpperCase();
+  if (jenis === "lower") return teks.toLowerCase();
+  if (jenis === "capitalize") {
+    return teks.toLowerCase().replace(/\b\p{L}/gu, huruf => huruf.toUpperCase());
+  }
+  return teks; // asli
+}
+
 document.getElementById("btnSalinTerbilang").addEventListener("click", () => {
+  if (!teksTerbilang) return;
+  const jenis = document.getElementById("formatSalin").value;
+  salinTeks(formatTeks(teksTerbilang, jenis));
+  const tombol = document.getElementById("btnSalinTerbilang");
+  tombol.textContent = "Tersalin!";
+  setTimeout(() => (tombol.textContent = "Salin hasil"), 1500);
+});.addEventListener("click", () => {
   if (teksTerbilang) salinTeks(teksTerbilang);
 });
 
