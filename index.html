@@ -497,7 +497,8 @@ async function siapkanGambar(file) {
 }
 
 function ambilKata(data) {
-  if (data.words && data.words.length) return data.words;
+  if (!data) return [];
+  if (Array.isArray(data.words) && data.words.length) return data.words;
   const out = [];
   (data.blocks || []).forEach(b =>
     (b.paragraphs || []).forEach(p =>
@@ -509,8 +510,8 @@ function ambilKata(data) {
   return out;
 }
 
-/* Jalankan OCR dengan dua mode. Mode 6 (blok seragam) dan mode 11
-   (teks jarang, cocok untuk banyak kolom). Pilih hasil dengan kata terbanyak. */
+/* Jalankan OCR dengan dua mode: 6 (blok seragam) dan 11 (teks jarang,
+   cocok untuk banyak kolom). Pilih hasil dengan kata terbanyak. */
 async function bacaGambar(canvas) {
   const w = await ambilWorker();
   const percobaan = ["6", "11"];
@@ -519,18 +520,22 @@ async function bacaGambar(canvas) {
   for (const mode of percobaan) {
     setStatus("Membaca gambar (mode " + mode + ")... 0%");
     await w.setParameters({ tessedit_pageseg_mode: mode });
-    const { data } = await w.recognize(canvas);
+
+    // Minta output teks, blok, dan kata secara eksplisit
+    const hasil = await w.recognize(canvas, {}, { text: true, blocks: true });
+    const data = hasil && hasil.data ? hasil.data : null;
+    if (!data) continue;
+
     const jumlahKata = ambilKata(data).filter(k => k.text && k.text.trim()).length;
     if (!terbaik || jumlahKata > terbaik.jumlahKata) {
       terbaik = { data, jumlahKata };
     }
-    // Jika mode pertama sudah menghasilkan banyak kata, tidak perlu mode kedua
     if (jumlahKata >= 40) break;
   }
+
+  if (!terbaik) throw new Error("OCR tidak menghasilkan data");
   return terbaik.data;
 }
-
-median = undefined; // placeholder agar tidak bentrok (tidak dipakai)
 
 function median(arr) {
   if (!arr.length) return 0;
@@ -862,7 +867,7 @@ async function prosesGambar(file) {
   setStatus("Menyiapkan gambar...");
   try {
     const canvas = await siapkanGambar(file);
-    const { data } = await bacaGambar(canvas);
+    const data = await bacaGambar(canvas);
 
     terakhirData = data;
     kataTerakhir = ambilKata(data);
