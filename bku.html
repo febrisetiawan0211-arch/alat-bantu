@@ -45,6 +45,12 @@ td.angka,th.angka{text-align:right}
 .formulir .baris>span{font-size:13px;font-weight:600;color:var(--teks)}
 .formulir input[readonly]{background:var(--garis);color:var(--teks);text-align:right;cursor:default}
 @media (max-width:700px){.formulir{grid-template-columns:1fr}}
+.grupo-halaman{display:inline-flex;border:1px solid var(--garis);border-radius:4px;overflow:hidden;background:var(--kartu)}
+.grupo-halaman .kecil{border:0;border-right:1px solid var(--garis);border-radius:0;padding:8px 12px;min-width:38px;background:var(--kartu);color:var(--teks);font-size:14px}
+.grupo-halaman .kecil:last-child{border-right:0}
+.grupo-halaman .kecil:disabled{color:#94a3b8;cursor:default}
+.grupo-halaman .nav{color:#0d6efd}
+.grupo-halaman .aktif{background:#0d6efd;color:#fff}
 #pesan{margin-top:8px;color:var(--aksen);min-height:18px}
 </style>
 </head>
@@ -103,6 +109,13 @@ td.angka,th.angka{text-align:right}
       <tbody id="tbodyGup"></tbody>
     </table>
   </div>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:14px">
+    <div class="bar" style="justify-content:center;gap:10px">
+      <div class="grupo-halaman" id="pagerGup"></div>
+      <select id="ukuranGup"><option>10</option><option>20</option><option>30</option><option>50</option></select>
+    </div>
+    <span id="infoGup" style="color:var(--redup);font-size:12px"></span>
+  </div>
 </div>
 
 <!-- ============ PANEL IMPOR ============ -->
@@ -133,6 +146,13 @@ td.angka,th.angka{text-align:right}
       </tr></thead>
       <tbody id="tbody"></tbody>
     </table>
+  </div>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:14px">
+    <div class="bar" style="justify-content:center;gap:10px">
+      <div class="grupo-halaman" id="pager"></div>
+      <select id="ukuranHalaman"><option>10</option><option>20</option><option>30</option><option>50</option></select>
+    </div>
+    <span id="infoHalaman" style="color:var(--redup);font-size:12px"></span>
   </div>
   <div class="bar">
     <button onclick="document.getElementById('fileExcel').click()">Impor Excel (.xlsx)</button>
@@ -221,6 +241,40 @@ window.tambahGup = () => {
   tampilkanSemua();
 };
 
+let gupHalaman = 1;
+let gupUkuran = 10;
+
+document.getElementById("ukuranGup").addEventListener("change", e => {
+  gupUkuran = Number(e.target.value);
+  gupHalaman = 1;
+  tampilkanSemua();
+});
+
+window.pindahGup = n => {
+  gupHalaman = n;
+  tampilkanSemua();
+};
+
+// Tombol halaman untuk tabel GUP/TUP: « ‹ 1 2 3 … 9 › »
+function tampilkanPagerGup(total, jumlah) {
+  document.getElementById("infoGup").textContent = total
+    ? `${(gupHalaman - 1) * gupUkuran + 1}–${Math.min(gupHalaman * gupUkuran, total)} dari ${total} pengajuan`
+    : "";
+  const pertama = gupHalaman === 1, terakhir = gupHalaman === jumlah;
+  let html = `<button class="kecil nav" onclick="pindahGup(1)" ${pertama ? "disabled" : ""}>«</button>` +
+             `<button class="kecil nav" onclick="pindahGup(${gupHalaman - 1})" ${pertama ? "disabled" : ""}>‹</button>`;
+  let sebelumnya = 0;
+  for (let i = 1; i <= jumlah; i++) {
+    if (!(i === 1 || i === jumlah || Math.abs(i - gupHalaman) <= 2)) continue;
+    if (i - sebelumnya > 1) html += `<span class="kecil" style="cursor:default">…</span>`;
+    html += `<button class="kecil${i === gupHalaman ? " aktif" : ""}" onclick="pindahGup(${i})">${i}</button>`;
+    sebelumnya = i;
+  }
+  html += `<button class="kecil nav" onclick="pindahGup(${gupHalaman + 1})" ${terakhir ? "disabled" : ""}>›</button>` +
+          `<button class="kecil nav" onclick="pindahGup(${jumlah})" ${terakhir ? "disabled" : ""}>»</button>`;
+  document.getElementById("pagerGup").innerHTML = html;
+}
+
 window.hapusGup = id => {
   const g = gup.find(x => x.id === id);
   if (!g) return;
@@ -242,7 +296,12 @@ function tampilkanKas() {
     <div><small>Dibayar dari UP</small><b>${rupiah(totalKeluar)}</b></div>
     <div><small>Saldo UP sekarang</small><b>${rupiah(saldo.UP)}</b></div>
     <div><small>Saldo TUP sekarang</small><b>${rupiah(saldo.TUP)}</b></div>`;
-  const daftar = gup.slice().sort((a, b) => String(b.tanggal).localeCompare(String(a.tanggal)));
+  const semuaGup = gup.slice().sort((a, b) => String(b.tanggal).localeCompare(String(a.tanggal)));
+  const jumlahGup = Math.max(1, Math.ceil(semuaGup.length / gupUkuran));
+  if (gupHalaman > jumlahGup) gupHalaman = jumlahGup;
+  const dariG = (gupHalaman - 1) * gupUkuran;
+  const daftar = semuaGup.slice(dariG, dariG + gupUkuran);
+  tampilkanPagerGup(semuaGup.length, jumlahGup);
   document.getElementById("tbodyGup").innerHTML = daftar.map(g =>
     `<tr><td>${esc(g.tanggal)}</td><td class="angka">${rupiah(g.jumlah)}</td><td>${g.pool || "UP"}</td><td>${esc(g.keterangan)}</td><td><button class="kecil bahaya" onclick="hapusGup(${g.id})">Hapus</button></td></tr>`
   ).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--redup)">Belum ada GUP.</td></tr>`;
@@ -424,7 +483,41 @@ function dataTerfilter() {
     .sort((a, b) => String(b.tanggal).localeCompare(String(a.tanggal)));
 }
 
-function tampilkanTabel(baris) {
+let halaman = 1;
+let ukuranHalaman = 10;
+
+document.getElementById("ukuranHalaman").addEventListener("change", e => {
+  ukuranHalaman = Number(e.target.value);
+  halaman = 1;
+  tampilkanSemua();
+});
+
+window.pindahHalaman = n => {
+  halaman = n;
+  tampilkanSemua();
+};
+
+// Tombol halaman: « ‹ 1 2 3 … 9 › »
+function tampilkanPager(total, jumlahHalaman) {
+  const awal = total ? (halaman - 1) * ukuranHalaman + 1 : 0;
+  const akhir = Math.min(halaman * ukuranHalaman, total);
+  document.getElementById("infoHalaman").textContent = `${awal}–${akhir} dari ${total} data`;
+  const pertama = halaman === 1, terakhir = halaman === jumlahHalaman;
+  let html = `<button class="kecil nav" onclick="pindahHalaman(1)" ${pertama ? "disabled" : ""}>«</button>` +
+             `<button class="kecil nav" onclick="pindahHalaman(${halaman - 1})" ${pertama ? "disabled" : ""}>‹</button>`;
+  let sebelumnya = 0;
+  for (let i = 1; i <= jumlahHalaman; i++) {
+    if (!(i === 1 || i === jumlahHalaman || Math.abs(i - halaman) <= 2)) continue;
+    if (i - sebelumnya > 1) html += `<span class="kecil" style="cursor:default">…</span>`;
+    html += `<button class="kecil${i === halaman ? " aktif" : ""}" onclick="pindahHalaman(${i})">${i}</button>`;
+    sebelumnya = i;
+  }
+  html += `<button class="kecil nav" onclick="pindahHalaman(${halaman + 1})" ${terakhir ? "disabled" : ""}>›</button>` +
+          `<button class="kecil nav" onclick="pindahHalaman(${jumlahHalaman})" ${terakhir ? "disabled" : ""}>»</button>`;
+  document.getElementById("pager").innerHTML = html;
+}
+
+function tampilkanTabel(baris, mulai = 0) {
   const tbody = document.getElementById("tbody");
   const sisa = hitungKas().sisa;
   if (!baris.length) {
@@ -435,7 +528,7 @@ function tampilkanTabel(baris) {
     const st = statusRecord(r);
     const centang = CEKLIS.map(([n, kode]) => r[n] ? kode : "··").join(" ");
     return `<tr>
-      <td>${i + 1}</td>
+      <td>${mulai + i + 1}</td>
       <td>${esc(r.tanggal)}</td>
       <td>${esc(r.noReg)}</td>
       <td>${esc(r.penagih)}</td>
@@ -471,9 +564,13 @@ function tampilkanRingkasan(baris) {
 
 function tampilkanSemua() {
   tampilkanKas();
-  const baris = dataTerfilter();
-  tampilkanTabel(baris);
-  tampilkanRingkasan(baris);
+  const semua = dataTerfilter();
+  const jumlahHalaman = Math.max(1, Math.ceil(semua.length / ukuranHalaman));
+  if (halaman > jumlahHalaman) halaman = jumlahHalaman;
+  const dari = (halaman - 1) * ukuranHalaman;
+  tampilkanTabel(semua.slice(dari, dari + ukuranHalaman), dari);
+  tampilkanPager(semua.length, jumlahHalaman);
+  tampilkanRingkasan(semua);
 }
 
 ["cari", "filterPPK", "filterJenis", "filterStatus"].forEach(id =>
