@@ -551,11 +551,11 @@ function buatTabel(kata, faktor) {
 
 /* =========================================================
    MODE PPh 21 FINAL - SBPEP
-   Setiap orang dikenali dari baris yang memuat 3 nilai rupiah
-   atau lebih (tarif, bruto, PPh, neto). Dari baris itu diambil:
+   - Orang dikenali dari baris yang memuat 3 nilai rupiah atau lebih
    - Bruto: nilai yang jika dikurangi PPh 5% sama dengan neto
-   - Nama: teks paling dekat di atas/bawah baris tersebut
-   - NPWP: angka setelah label NPWP, atau angka 15 digit
+   - Nama: teks paling dekat di sekitar baris tersebut
+   - NPWP: setiap NPWP dipasangkan ke baris orang terdekat,
+     dan satu NPWP hanya boleh dipakai satu kali
    ========================================================= */
 function parseSBPEP(data) {
   const garis = (data.lines && data.lines.length)
@@ -566,21 +566,51 @@ function parseSBPEP(data) {
   const rxNama = /^[A-Za-z][A-Za-z.' ]{4,}$/;
   const rxLabel = /\b(NIP|NPWP|NIK|JABATAN|TANGGAL|TARIF|BRUTO|NETO|TIM|ANGGOTA|KETUA|SUB|AGUSTUS|HARI|GOL|TGL)\b/i;
 
-  // Baris data: baris yang memuat minimal 3 nilai rupiah
+  // 1. Baris data: baris yang memuat minimal 3 nilai rupiah
   const barisData = [];
   garis.forEach((t, i) => {
     const nilai = t.match(rxUang) || [];
     if (nilai.length >= 3) barisData.push(i);
   });
 
-  const hasil = [];
+  // 2. Kumpulkan semua kandidat NPWP di dokumen beserta posisi barisnya
+  const kandidatNpwp = [];
+  garis.forEach((t, j) => {
+    const m = t.match(/NPWP\s*[:.]?\s*([\d.\-\s]{10,})/i);
+    if (m) {
+      const v = m[1].replace(/\D/g, "");
+      if (v.length >= 12) kandidatNpwp.push({ j, v });
+      return;
+    }
+    // Cadangan: angka 15-16 digit pada baris yang bukan label NIP/NIK
+    if (/NIP|NIK/i.test(t)) return;
+    const m2 = t.match(/(?<!\d)\d{15,16}(?!\d)/);
+    if (m2) kandidatNpwp.push({ j, v: m2[0] });
+  });
 
+  // 3. Pasangkan NPWP dengan orang terdekat (jarak terpendek lebih dulu),
+  //    satu NPWP hanya boleh dipakai satu kali
+  const pasangan = [];
+  kandidatNpwp.forEach(p => {
+    barisData.forEach((i, k) => pasangan.push({ p, k, jarak: Math.abs(p.j - i) }));
+  });
+  pasangan.sort((a, b) => a.jarak - b.jarak);
+
+  const npwpPerOrang = new Array(barisData.length).fill("");
+  const sudahDipakai = new Set();
+  for (const x of pasangan) {
+    if (npwpPerOrang[x.k] || sudahDipakai.has(x.p)) continue;
+    npwpPerOrang[x.k] = x.p.v;
+    sudahDipakai.add(x.p);
+  }
+
+  // 4. Susun hasil per orang
+  const hasil = [];
   barisData.forEach((i, k) => {
-    // Batas wilayah orang ini: tidak boleh melewati baris data orang lain
     const batasAtas = k > 0 ? barisData[k - 1] + 1 : 0;
     const batasBawah = k + 1 < barisData.length ? barisData[k + 1] - 1 : garis.length - 1;
 
-    // 1. Bruto: nilai yang pasangan netonya (bruto - PPh 5%) juga ada di baris ini
+    // Bruto: nilai yang pasangan netonya (bruto - PPh 5%) juga ada di baris ini
     const angka = (garis[i].match(rxUang) || []).map(s => parseAngka(s));
     let bruto = null;
     for (const b of angka) {
@@ -590,7 +620,7 @@ function parseSBPEP(data) {
     // Cadangan: urutan kiri ke kanan adalah tarif, bruto, PPh, neto
     if (bruto === null && angka.length >= 2) bruto = angka[1];
 
-    // 2. Nama: cari ke atas dulu (paling dekat), lalu ke bawah
+    // Nama: cari ke atas dulu (paling dekat), lalu ke bawah, tanpa keluar dari wilayah orang ini
     let nama = "";
     const urutanCari = [];
     for (let j = i; j >= Math.max(batasAtas, i - 5); j--) urutanCari.push(j);
@@ -600,25 +630,9 @@ function parseSBPEP(data) {
       if (rxNama.test(c) && !rxLabel.test(c)) { nama = c; break; }
     }
 
-    // 3. NPWP: cari label NPWP di sekitar baris, ambil angka setelahnya
-    let npwp = "";
-    const awalCari = Math.max(batasAtas, i - 5);
-    const akhirCari = Math.min(batasBawah, i + 3);
-    for (let j = awalCari; j <= akhirCari && !npwp; j++) {
-      const m = garis[j].match(/NPWP\s*[:.]?\s*([\d.\-\s]{10,})/i);
-      if (m) npwp = m[1].replace(/\D/g, "");
-    }
-    // Cadangan: angka tepat 15 digit (format NPWP), bukan NIP (18) atau NIK (16)
-    if (!npwp) {
-      for (let j = awalCari; j <= akhirCari && !npwp; j++) {
-        const m = garis[j].match(/(?<!\d)\d{15}(?!\d)/);
-        if (m) npwp = m[0];
-      }
-    }
-
     hasil.push([
       nama || "(nama tidak terbaca)",
-      npwp,
+      npwpPerOrang[k],
       bruto === null ? "" : String(bruto)
     ]);
   });
