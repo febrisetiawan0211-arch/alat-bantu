@@ -552,11 +552,37 @@ function buatTabel(kata, faktor) {
 /* =========================================================
    MODE PPh 21 FINAL - SBPEP
    - Orang dikenali dari baris yang memuat 3 nilai rupiah atau lebih
-   - Bruto: nilai yang jika dikurangi PPh 5% sama dengan neto
+   - Bruto: cariBruto() memakai tarif PPh umum (0%, 5%, 15%, dst.)
    - Nama: teks paling dekat di sekitar baris tersebut
    - NPWP: setiap NPWP dipasangkan ke baris orang terdekat,
      dan satu NPWP hanya boleh dipakai satu kali
    ========================================================= */
+
+// Tarif PPh 21 yang umum dipakai pada dokumen ini (0% ditangani terpisah)
+const TARIF_PPH = [0.05, 0.06, 0.15, 0.25, 0.30];
+
+/* Bruto = PPh + neto.
+   - PPh 0%: bruto dan neto sama, jadi nilai bruto muncul dua kali.
+   - PPh > 0%: cari nilai yang punya pasangan PPh dengan tarif umum,
+     dan selisihnya (neto) juga ada di baris yang sama. */
+function cariBruto(angka) {
+  const ganda = angka.filter((v, i) => angka.indexOf(v) !== i);
+  if (ganda.length) return Math.max(...ganda);
+
+  let cadangan = null;
+  for (const v of angka) {
+    for (const p of angka) {
+      if (p >= v) continue;
+      const rasio = p / v;
+      if (!TARIF_PPH.some(r => Math.abs(rasio - r) < 0.005)) continue;
+      const neto = v - p;
+      if (angka.some(n => Math.abs(n - neto) <= v * 0.005)) return v;
+      if (cadangan === null) cadangan = v;
+    }
+  }
+  return cadangan;
+}
+
 function parseSBPEP(data) {
   const garis = (data.lines && data.lines.length)
     ? data.lines.map(l => l.text.trim())
@@ -566,14 +592,15 @@ function parseSBPEP(data) {
   const rxNama = /^[A-Za-z][A-Za-z.' ]{4,}$/;
   const rxLabel = /\b(NIP|NPWP|NIK|JABATAN|TANGGAL|TARIF|BRUTO|NETO|TIM|ANGGOTA|KETUA|SUB|AGUSTUS|HARI|GOL|TGL)\b/i;
 
-  // 1. Baris data: baris yang memuat minimal 3 nilai rupiah
+  // 1. Baris data: baris yang memuat minimal 3 nilai rupiah (baris JUMLAH dilewati)
   const barisData = [];
   garis.forEach((t, i) => {
+    if (/JUMLAH/i.test(t)) return;
     const nilai = t.match(rxUang) || [];
     if (nilai.length >= 3) barisData.push(i);
   });
 
-  // 2. Kumpulkan semua kandidat NPWP di dokumen beserta posisi barisnya
+  // 2. Kumpulkan kandidat NPWP beserta posisi barisnya
   const kandidatNpwp = [];
   garis.forEach((t, j) => {
     const m = t.match(/NPWP\s*[:.]?\s*([\d.\-\s]{10,})/i);
@@ -582,8 +609,7 @@ function parseSBPEP(data) {
       if (v.length >= 12) kandidatNpwp.push({ j, v });
       return;
     }
-    // Cadangan: angka 15-16 digit, termasuk baris NIK (NPWP sering sama dengan NIK).
-    // Spasi di antara digit dihapus dulu agar angka yang terpisah tetap terbaca.
+    // Cadangan: angka 15-16 digit, termasuk baris NIK (NPWP sering sama dengan NIK)
     const tanpaSpasi = t.replace(/(?<=\d)\s+(?=\d)/g, "");
     const m2 = tanpaSpasi.match(/(?<!\d)\d{15,16}(?!\d)/);
     if (m2) kandidatNpwp.push({ j, v: m2[0] });
@@ -611,13 +637,9 @@ function parseSBPEP(data) {
     const batasAtas = k > 0 ? barisData[k - 1] + 1 : 0;
     const batasBawah = k + 1 < barisData.length ? barisData[k + 1] - 1 : garis.length - 1;
 
-    // Bruto: nilai yang pasangan netonya (bruto - PPh 5%) juga ada di baris ini
+    // Bruto
     const angka = (garis[i].match(rxUang) || []).map(s => parseAngka(s));
-    let bruto = null;
-    for (const b of angka) {
-      const neto = b - Math.round(b * 0.05);
-      if (angka.includes(neto)) { bruto = b; break; }
-    }
+    let bruto = cariBruto(angka);
     // Cadangan: urutan kiri ke kanan adalah tarif, bruto, PPh, neto
     if (bruto === null && angka.length >= 2) bruto = angka[1];
 
