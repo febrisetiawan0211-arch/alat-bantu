@@ -126,7 +126,7 @@
   table.hasil-tabel th.nomor, table.hasil-tabel td.nomor { width: 40px; text-align: center; color: var(--redup); font-size: 12px; }
   table.hasil-tabel th { background: #f1f5f9; font-weight: 600; }
   table.hasil-tabel input {
-    width: 100%; border: 1px solid transparent; padding: 6px 8px; font-size: 14px;
+    width: 100%; min-width: 90px; border: 1px solid transparent; padding: 6px 8px; font-size: 14px;
     background: transparent; border-radius: 6px; color: var(--teks);
   }
   table.hasil-tabel input:hover { border-color: var(--garis); }
@@ -212,6 +212,7 @@
             <option value="otomatis">Otomatis</option>
             <option value="teks">Teks</option>
             <option value="tabel">Tabel</option>
+            <option value="dokumen">Dokumen SBK (per orang)</option>
           </select>
         </div>
         <div class="status" id="statusOCR">Belum ada gambar.</div>
@@ -226,7 +227,7 @@
         </div>
       </div>
 
-      <!-- Hasil mode TABEL -->
+      <!-- Hasil mode TABEL dan DOKUMEN -->
       <div class="kartu" id="kartuTabel" style="display:none">
         <div class="pengaturan">
           <label class="label-mode">
@@ -427,11 +428,12 @@ const rentangKolom = document.getElementById("rentangKolom");
 const nilaiRentang = document.getElementById("nilaiRentang");
 const infoTabel = document.getElementById("infoTabel");
 
-let worker = null;      // worker Tesseract, dibuat sekali lalu dipakai ulang
-let adaHasil = false;   // sudah ada hasil OCR?
-let tabelData = [];     // array of array (sel berupa string), hasil yang bisa diedit
-let kolomTabel = 0;     // jumlah kolom tabel
-let kataTerakhir = [];  // kata beserta posisinya dari OCR, dipakai untuk hitung ulang kolom
+let worker = null;       // worker Tesseract, dibuat sekali lalu dipakai ulang
+let terakhirData = null; // hasil mentah OCR terakhir (teks + kata + posisi)
+let kataTerakhir = [];   // kata beserta posisinya, untuk membentuk tabel
+let tabelData = [];      // array of array (sel berupa string), bisa diedit
+let adaHasil = false;
+let kolomTabel = 0;
 
 function setStatus(pesan, jenis = "") {
   statusOCR.className = "status " + jenis;
@@ -447,7 +449,7 @@ async function ambilWorker() {
         }
       }
     });
-    // PSM 6 = satu blok teks seragam (cocok untuk tabel); spasi antarkata dipertahankan
+    // PSM 6 = satu blok teks seragam; spasi antarkata dipertahankan
     await worker.setParameters({
       tessedit_pageseg_mode: "6",
       preserve_interword_spaces: "1"
@@ -508,8 +510,7 @@ function median(arr) {
 }
 
 /* Kelompokkan kata menjadi baris, lalu pecah tiap baris menjadi sel.
-   Dua kata dianggap satu sel jika jaraknya <= faktor x tinggi huruf.
-   Faktor besar = kolom lebih sedikit; faktor kecil = kolom lebih banyak. */
+   Dua kata dianggap satu sel jika jaraknya <= faktor x tinggi huruf. */
 function buatTabel(kata, faktor) {
   const valid = kata.filter(w => w.text && w.text.trim() && w.bbox);
   if (!valid.length) return [];
@@ -517,7 +518,6 @@ function buatTabel(kata, faktor) {
   const tinggi = median(valid.map(w => w.bbox.y1 - w.bbox.y0)) || 10;
   const yTengah = w => (w.bbox.y0 + w.bbox.y1) / 2;
 
-  // Kelompokkan per baris berdasarkan posisi vertikal
   const urut = [...valid].sort((a, b) => yTengah(a) - yTengah(b));
   const kelompok = [];
   for (const w of urut) {
@@ -549,6 +549,63 @@ function buatTabel(kata, faktor) {
   });
 }
 
+/* =========================================================
+   MODE DOKUMEN SBK: cari baris yang memuat nilai rupiah,
+   lalu ambil nama, NIP, NPWP, dan NIK dari baris di sekitarnya
+   ========================================================= */
+function parseDokumenSBK(data) {
+  const garis = (data.lines && data.lines.length)
+    ? data.lines.map(l => l.text.trim())
+    : (data.text || "").split("\n").map(s => s.trim());
+
+  const rxUang = /\d{1,3}(?:\.\d{3})+/g;
+  const rxNama = /^[A-Za-z][A-Za-z.' ]{4,}$/;
+  const abaikan = /(NIP|NPWP|NIK|JABATAN|NAMA|TANGGAL|TARIF|BRUTO|NETO|Tim|Anggota|Ketua|Agustus|Juli|September|Oktober)/i;
+  const rxNip = /NIP\s*[:.]?\s*([\d\s]{10,})/i;
+  const rxNpwp = /NPWP\s*[:.]?\s*([\d.\-\s]{8,})/i;
+  const rxNik = /NIK\s*[:.]?\s*([\d\s]{10,})/i;
+  const hasil = [];
+
+  // Ambil nilai label (NIP/NPWP/NIK) dari beberapa baris mulai indeks
+  function ambilLabel(indeks, rx) {
+    for (let j = indeks; j < Math.min(garis.length, indeks + 4); j++) {
+      const m = garis[j].match(rx);
+      if (m) return m[1].replace(/\s/g, "");
+    }
+    return "";
+  }
+
+  garis.forEach((teks, i) => {
+    const nilai = teks.match(rxUang);
+    if (!nilai || nilai.length < 2) return;
+
+    // Cari nama: mundur maksimal 4 baris, ambil yang paling dekat
+    let nama = "";
+    let indeksNama = -1;
+    for (let j = i; j >= Math.max(0, i - 4) && !nama; j--) {
+      const kandidat = garis[j].replace(/^\d{1,2}\s+/, "").replace(/[|_]/g, "").trim();
+      if (rxNama.test(kandidat) && !abaikan.test(kandidat)) {
+        nama = kandidat;
+        indeksNama = j;
+      }
+    }
+    if (!nama) return;
+
+    const nip = ambilLabel(indeksNama, rxNip);
+    const npwp = ambilLabel(indeksNama, rxNpwp);
+    const nik = ambilLabel(indeksNama, rxNik);
+
+    const tarif = nilai[0];
+    const bruto = nilai[1];
+    const neto = nilai[nilai.length - 1];
+    hasil.push([nama, nip, npwp, nik, tarif, bruto, neto]);
+  });
+
+  return hasil;
+}
+
+const HEADER_DOKUMEN = ["Nama Lengkap", "NIP", "NPWP", "NIK", "Tarif", "Jumlah Bruto (Rp)", "Jumlah Neto (Rp)"];
+
 // Mode otomatis: jika mayoritas baris punya 2 kolom atau lebih, anggap tabel
 function apakahTabel(baris) {
   if (baris.length < 2) return false;
@@ -565,25 +622,46 @@ function samakanKolom(data) {
   });
 }
 
-function tampilkanOCR() {
-  const mode = modeOCR.value;
-  const pakaiTabel = mode === "tabel" || (mode === "otomatis" && apakahTabel(tabelData));
-
-  kartuTeks.style.display = (!pakaiTabel && adaHasil) ? "block" : "none";
-  kartuTabel.style.display = (pakaiTabel && adaHasil) ? "block" : "none";
-  if (!adaHasil) return;
-
-  if (pakaiTabel) renderTabel();
-  else areaTeks.value = teksDariTabel();
-}
-
 function teksDariTabel() {
   return tabelData.map(r => r.join("  ")).join("\n");
 }
 
+/* Menampilkan hasil OCR sesuai mode yang dipilih.
+   Dipanggil setelah membaca gambar, saat mode diganti, dan saat slider diubah. */
+function tampilkanDariData() {
+  if (!adaHasil) return;
+  const mode = modeOCR.value;
+  let bentuk;
+
+  if (mode === "dokumen") {
+    bentuk = "dokumen";
+    cekHeader.checked = true;
+    const rows = terakhirData ? parseDokumenSBK(terakhirData) : [];
+    tabelData = [HEADER_DOKUMEN, ...rows];
+  } else {
+    const dariKata = buatTabel(kataTerakhir, Number(rentangKolom.value));
+    tabelData = dariKata.length
+      ? dariKata
+      : (terakhirData?.text || "").split("\n").filter(s => s.trim()).map(s => [s.trim()]);
+    bentuk = mode === "tabel" || (mode === "otomatis" && apakahTabel(tabelData)) ? "tabel" : "teks";
+  }
+
+  if (bentuk === "teks") {
+    kartuTabel.style.display = "none";
+    kartuTeks.style.display = "block";
+    areaTeks.value = teksDariTabel();
+  } else {
+    kartuTeks.style.display = "none";
+    kartuTabel.style.display = "block";
+    renderTabel();
+  }
+
+  return bentuk;
+}
+
 function renderTabel() {
-  kolomTabel = Math.max(1, ...tabelData.map(r => r.length));
   tabelData = samakanKolom(tabelData);
+  kolomTabel = Math.max(1, ...tabelData.map(r => r.length));
   const adaJudul = cekHeader.checked && tabelData.length > 0;
 
   let htmlHead = "<tr><th class='nomor'>No</th>";
@@ -608,7 +686,7 @@ function renderTabel() {
   }
   tbodyTabel.innerHTML = htmlBody;
 
-  kosongTabel.style.display = tabelData.length ? "none" : "block";
+  kosongTabel.style.display = tabelData.length > (adaJudul ? 1 : 0) ? "none" : "block";
   const jumlahBaris = Math.max(0, tabelData.length - (adaJudul ? 1 : 0));
   infoTabel.textContent = jumlahBaris + " baris, " + kolomTabel + " kolom";
 }
@@ -636,31 +714,37 @@ tbodyTabel.addEventListener("click", e => {
 
 cekHeader.addEventListener("change", renderTabel);
 
-// Ubah jarak pemisah kolom: hitung ulang dari data OCR (edit manual akan hilang)
 rentangKolom.addEventListener("input", () => {
   nilaiRentang.textContent = Number(rentangKolom.value).toFixed(1);
 });
 rentangKolom.addEventListener("change", () => {
-  if (!kataTerakhir.length) return;
-  tabelData = buatTabel(kataTerakhir, Number(rentangKolom.value));
-  tampilkanOCR();
+  if (modeOCR.value === "dokumen" || !kataTerakhir.length) return;
+  tampilkanDariData();
   setStatus("Kolom dihitung ulang dengan jarak " + Number(rentangKolom.value).toFixed(1) + ".");
 });
 
+modeOCR.addEventListener("change", () => {
+  if (!adaHasil) return;
+  const bentuk = tampilkanDariData();
+  setStatus("Mode diganti. Ditampilkan sebagai " + bentuk + ".");
+});
+
 document.getElementById("btnTambahBaris").addEventListener("click", () => {
-  if (!adaHasil) { adaHasil = true; kartuTabel.style.display = "block"; }
+  if (!adaHasil) { adaHasil = true; }
   tabelData.push(Array(Math.max(1, kolomTabel)).fill(""));
+  kartuTeks.style.display = "none";
+  kartuTabel.style.display = "block";
   renderTabel();
 });
 
 document.getElementById("btnTambahKolom").addEventListener("click", () => {
-  if (!adaHasil) { adaHasil = true; kartuTabel.style.display = "block"; }
+  if (!adaHasil) { adaHasil = true; }
   if (!tabelData.length) tabelData.push([""]);
   tabelData = tabelData.map(r => [...r, ""]);
+  kartuTeks.style.display = "none";
+  kartuTabel.style.display = "block";
   renderTabel();
 });
-
-modeOCR.addEventListener("change", tampilkanOCR);
 
 areaTeks.addEventListener("input", () => {
   tabelData = areaTeks.value.split("\n").map(baris => [baris]);
@@ -693,22 +777,26 @@ async function prosesGambar(file) {
     setStatus("Membaca gambar... 0%");
     const { data } = await w.recognize(canvas);
 
+    terakhirData = data;
     kataTerakhir = ambilKata(data);
-    const baris = buatTabel(kataTerakhir, Number(rentangKolom.value));
 
-    if (!baris.length && !(data.text || "").trim()) {
+    if (!(data.text || "").trim()) {
       setStatus("Tidak ada teks yang terbaca. Coba gambar yang lebih jelas.", "gagal");
       return;
     }
 
-    // Jika kata tidak punya posisi, pakai teks mentah per baris
-    tabelData = baris.length ? baris : (data.text || "").split("\n").filter(s => s.trim()).map(s => [s.trim()]);
     adaHasil = true;
-    tampilkanOCR();
+    const bentuk = tampilkanDariData();
 
-    const bentuk = modeOCR.value === "tabel" || (modeOCR.value === "otomatis" && apakahTabel(tabelData))
-      ? "tabel" : "teks";
-    setStatus(tabelData.length + " baris terbaca sebagai " + bentuk + ". Periksa lalu salin.", "sukses");
+    if (bentuk === "dokumen") {
+      const jumlah = tabelData.length - 1;
+      setStatus(jumlah > 0
+        ? jumlah + " orang terbaca. Periksa lalu salin ke Excel."
+        : "Tidak ada baris dengan nilai rupiah yang terbaca.",
+        jumlah > 0 ? "sukses" : "gagal");
+    } else {
+      setStatus(tabelData.length + " baris terbaca sebagai " + bentuk + ". Periksa lalu salin.", "sukses");
+    }
   } catch (err) {
     setStatus("Gagal membaca gambar: " + err.message, "gagal");
   }
