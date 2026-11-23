@@ -440,6 +440,7 @@ function setStatus(pesan, jenis = "") {
   statusOCR.textContent = pesan;
 }
 
+// Worker dibuat sekali. Mode PSM diganti saat dibutuhkan (lihat bacaGambar).
 async function ambilWorker() {
   if (!worker) {
     worker = await Tesseract.createWorker("ind+eng", 1, {
@@ -449,40 +450,46 @@ async function ambilWorker() {
         }
       }
     });
-    // PSM 6 = satu blok teks seragam; spasi antarkata dipertahankan
-    await worker.setParameters({
-      tessedit_pageseg_mode: "6",
-      preserve_interword_spaces: "1"
-    });
+    await worker.setParameters({ preserve_interword_spaces: "1" });
   }
   return worker;
 }
 
-/* Perbesar gambar dan naikkan kontras (hitam-putih) agar OCR lebih akurat */
+/* Perbesar gambar (target lebar ~3000 px), tambahkan batas putih,
+   lalu ubah ke abu-abu dengan kontras lembut (tanpa hitam-putih keras) */
 async function siapkanGambar(file) {
   const bmp = await createImageBitmap(file);
-  const skala = Math.min(4, Math.max(2, 2200 / bmp.width));
+  const TARGET_LEBAR = 3000;
+  const skala = Math.min(4, Math.max(2, TARGET_LEBAR / bmp.width));
+  const pad = Math.round(20 * skala);
+
   const c = document.createElement("canvas");
-  c.width = Math.round(bmp.width * skala);
-  c.height = Math.round(bmp.height * skala);
+  c.width = Math.round(bmp.width * skala) + pad * 2;
+  c.height = Math.round(bmp.height * skala) + pad * 2;
   const ctx = c.getContext("2d");
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, c.width, c.height);
   ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(bmp, 0, 0, c.width, c.height);
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bmp, pad, pad, c.width - pad * 2, c.height - pad * 2);
 
+  // Abu-abu + peregangan kontras lembut (persentil 2% - 98%)
   const img = ctx.getImageData(0, 0, c.width, c.height);
   const d = img.data;
-  let min = 255, max = 0;
+  const hist = new Array(256).fill(0);
   for (let i = 0; i < d.length; i += 4) {
-    const g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    const g = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
     d[i] = d[i + 1] = d[i + 2] = g;
-    if (g < min) min = g;
-    if (g > max) max = g;
+    hist[g]++;
   }
-  const rentang = Math.max(1, max - min);
+  const total = c.width * c.height;
+  let lo = 0, hi = 255, acc = 0;
+  for (let g = 0; g < 256; g++) { acc += hist[g]; if (acc / total > 0.02) { lo = g; break; } }
+  acc = 0;
+  for (let g = 255; g >= 0; g--) { acc += hist[g]; if (acc / total > 0.02) { hi = g; break; } }
+  const rentang = Math.max(1, hi - lo);
   for (let i = 0; i < d.length; i += 4) {
-    const v = ((d[i] - min) / rentang) * 255;
+    const v = Math.max(0, Math.min(255, ((d[i] - lo) / rentang) * 255));
     d[i] = d[i + 1] = d[i + 2] = v;
   }
   ctx.putImageData(img, 0, 0);
@@ -501,6 +508,29 @@ function ambilKata(data) {
   );
   return out;
 }
+
+/* Jalankan OCR dengan dua mode. Mode 6 (blok seragam) dan mode 11
+   (teks jarang, cocok untuk banyak kolom). Pilih hasil dengan kata terbanyak. */
+async function bacaGambar(canvas) {
+  const w = await ambilWorker();
+  const percobaan = ["6", "11"];
+  let terbaik = null;
+
+  for (const mode of percobaan) {
+    setStatus("Membaca gambar (mode " + mode + ")... 0%");
+    await w.setParameters({ tessedit_pageseg_mode: mode });
+    const { data } = await w.recognize(canvas);
+    const jumlahKata = ambilKata(data).filter(k => k.text && k.text.trim()).length;
+    if (!terbaik || jumlahKata > terbaik.jumlahKata) {
+      terbaik = { data, jumlahKata };
+    }
+    // Jika mode pertama sudah menghasilkan banyak kata, tidak perlu mode kedua
+    if (jumlahKata >= 40) break;
+  }
+  return terbaik.data;
+}
+
+median = undefined; // placeholder agar tidak bentrok (tidak dipakai)
 
 function median(arr) {
   if (!arr.length) return 0;
@@ -832,29 +862,28 @@ async function prosesGambar(file) {
   setStatus("Menyiapkan gambar...");
   try {
     const canvas = await siapkanGambar(file);
-    const w = await ambilWorker();
-    setStatus("Membaca gambar... 0%");
-    const { data } = await w.recognize(canvas);
+    const { data } = await bacaGambar(canvas);
 
     terakhirData = data;
     kataTerakhir = ambilKata(data);
 
     if (!(data.text || "").trim()) {
-      setStatus("Tidak ada teks yang terbaca. Coba gambar yang lebih jelas.", "gagal");
+      setStatus("Tidak ada teks yang terbaca. Coba gambar yang lebih besar atau lebih jelas.", "gagal");
       return;
     }
 
     adaHasil = true;
     const bentuk = tampilkanDariData();
+    const jumlahKata = kataTerakhir.filter(k => k.text && k.text.trim()).length;
 
     if (bentuk === "sbpep") {
       const jumlah = tabelData.length - 1;
       setStatus(jumlah > 0
-        ? jumlah + " orang terbaca. Periksa NPWP dan bruto, lalu salin ke Excel."
-        : "Tidak ada data orang yang terbaca. Coba gambar yang lebih jelas.",
+        ? jumlah + " orang terbaca (" + jumlahKata + " kata). Periksa NPWP dan bruto, lalu salin ke Excel."
+        : "Tidak ada data orang yang terbaca (" + jumlahKata + " kata). Coba gambar yang lebih besar.",
         jumlah > 0 ? "sukses" : "gagal");
     } else {
-      setStatus(tabelData.length + " baris terbaca sebagai " + bentuk + ". Periksa lalu salin.", "sukses");
+      setStatus(tabelData.length + " baris terbaca sebagai " + bentuk + " (" + jumlahKata + " kata). Periksa lalu salin.", "sukses");
     }
   } catch (err) {
     setStatus("Gagal membaca gambar: " + err.message, "gagal");
