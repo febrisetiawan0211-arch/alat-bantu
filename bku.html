@@ -142,7 +142,7 @@ td.angka,th.angka{text-align:right}
     <table>
       <thead><tr>
         <th>No</th><th>Tanggal</th><th>No. Register</th><th>Penagih</th><th>PPK</th><th>Jenis</th>
-        <th class="angka">Bruto</th><th class="angka">Pajak</th><th class="angka">Netto</th><th class="angka">Sisa saldo sblm bayar</th>
+        <th class="angka">Bruto</th><th class="angka">Pajak</th><th class="angka">Netto</th>
         <th title="Bupot dibuat">BP</th><th title="Faktur pajak dilaporkan">FP</th><th title="Sudah di Sintag">SG</th><th title="Pajak dipungut">PG</th><th title="Pajak disetor (SAKTI)">SK</th><th title="Pajak sudah disetor">DS</th><th title="SPJ sudah dibayar">DB</th><th>Status</th><th>Aksi</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
@@ -564,9 +564,9 @@ function nolkanPajak(r) {
 
 function tampilkanTabel(baris, mulai = 0) {
   const tbody = document.getElementById("tbody");
-  const sisa = hitungKas().sisa;
+
   if (!baris.length) {
-    tbody.innerHTML = `<tr><td colspan="19" style="text-align:center;color:var(--redup);padding:20px">Belum ada data.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="18" style="text-align:center;color:var(--redup);padding:20px">Belum ada data.</td></tr>`;
     return;
   }
   tbody.innerHTML = baris.map((r, i) => {
@@ -582,7 +582,7 @@ function tampilkanTabel(baris, mulai = 0) {
       <td class="angka">${rupiah(r.bruto)}</td>
       <td class="angka">${rupiah(r.deposit)}</td>
       <td class="angka">${rupiah(r.netto)}</td>
-      <td class="angka">${sisa[r.id] == null ? "-" : rupiah(sisa[r.id])}</td>
+      
       ${CEKLIS.map(([n]) => `<td class="centang">${!berlaku(r, n) ? "–" : (r[n] ? "✓" : "")}</td>`).join("")}
       <td><span class="status ${kelasStatus(st)}">${st}</span></td>
       <td>
