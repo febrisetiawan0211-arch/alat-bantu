@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terbilang Rupiah</title>
+<style>
+  :root{--aksen:#0f766e;--aksen-gelap:#0b5a54;--aksen-muda:#ecfdf5;--latar:#f8fafc;--teks:#1e293b;--redup:#64748b;--garis:#e2e8f0}
+  *{box-sizing:border-box}
+  body{font-family:Cambria,Georgia,serif;margin:0;background:var(--latar);color:var(--teks);padding:24px;line-height:1.5}
+  button,input,select{font-family:inherit}
+  .judul h2{margin:0 0 4px;font-size:22px}
+  .judul p{margin:0 0 20px;color:var(--redup);font-size:14px}
+  .kartu{background:#fff;border-radius:16px;padding:24px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 6px 18px rgba(0,0,0,.05)}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .lebar{flex:1;min-width:200px}
+  input[type=text]{padding:12px 14px;font-size:15px;border:1px solid var(--garis);border-radius:10px;outline:none}
+  input[type=text]:focus{border-color:var(--aksen);box-shadow:0 0 0 3px rgba(15,118,110,.15)}
+  select{padding:10px 12px;font-size:14px;border:1px solid var(--garis);border-radius:10px;background:#fff}
+  button.utama{background:var(--aksen);color:#fff;border:none;padding:11px 20px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600}
+  button.utama:hover{background:var(--aksen-gelap)}
+  button.sekunder{background:#fff;color:var(--teks);border:1px solid var(--garis);padding:10px 16px;border-radius:10px;cursor:pointer;font-size:14px}
+  button.sekunder:hover{background:var(--latar)}
+  .hasil{margin-top:18px;padding:16px 18px;min-height:28px;font-size:18px;background:var(--aksen-muda);border-left:4px solid var(--aksen);border-radius:10px}
+  .hasil.kosong{background:var(--latar);border-left-color:var(--garis);color:var(--redup);font-size:15px}
+  .hasil small{display:block;color:var(--redup);font-size:13px;margin-top:4px}
+</style>
+</head>
+<body>
+
+<div class="judul">
+  <h2>Terbilang Rupiah</h2>
+  <p>Ketik angka, hasilnya langsung muncul dalam bentuk tulisan.</p>
+</div>
+
+<div class="kartu">
+  <div class="bar">
+    <input type="text" id="inputAngka" class="lebar" placeholder="Contoh: 480000">
+    <button class="utama" id="btnTerbilang">Ubah</button>
+  </div>
+  <div class="hasil kosong" id="hasilTerbilang">Hasil akan muncul di sini.</div>
+  <div class="bar" style="margin-top:14px">
+    <select id="formatSalin">
+      <option value="asli">Format asli (Kalimat)</option>
+      <option value="upper">UPPERCASE</option>
+      <option value="capitalize">Capitalize Each Word</option>
+      <option value="lower">lowercase</option>
+    </select>
+    <button class="sekunder" id="btnSalinTerbilang">Salin hasil</button>
+  </div>
+</div>
+
+<script>
+function salinTeks(teks) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(teks);
+  }
+  const ta = document.createElement("textarea");
+  ta.value = teks;
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
+  return Promise.resolve();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+function parseAngka(teks) {
+  const digit = (teks || "").replace(/[^\d]/g, "");
+  return digit ? parseInt(digit, 10) : null;
+}
+
+function formatRp(n) {
+  return "Rp" + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+function formatTeks(teks, jenis) {
+  if (jenis === "upper") return teks.toUpperCase();
+  if (jenis === "lower") return teks.toLowerCase();
+  if (jenis === "capitalize") {
+    return teks.toLowerCase().split(" ").map(kata =>
+      kata.charAt(0).toUpperCase() + kata.slice(1)
+    ).join(" ");
+  }
+  return teks;
+}
+
+const SATUAN = ["", "satu", "dua", "tiga", "empat", "lima", "enam", "tujuh", "delapan", "sembilan"];
+
+function duaDigit(y) {
+  if (y < 10) return SATUAN[y];
+  if (y === 10) return "sepuluh";
+  if (y === 11) return "sebelas";
+  if (y < 20) return SATUAN[y - 10] + " belas";
+  const puluh = SATUAN[Math.floor(y / 10)] + " puluh";
+  return y % 10 ? puluh + " " + SATUAN[y % 10] : puluh;
+}
+
+function ratusan(x) {
+  if (x === 0) return "";
+  const ratus = Math.floor(x / 100);
+  const sisa = x % 100;
+  let s = "";
+  if (ratus === 1) s = "seratus";
+  else if (ratus > 1) s = SATUAN[ratus] + " ratus";
+  if (sisa) s += (s ? " " : "") + duaDigit(sisa);
+  return s;
+}
+
+function bagian(x) {
+  if (x === 0) return "";
+  if (x < 1000) return ratusan(x);
+  const skala = [[1e12, "triliun"], [1e9, "miliar"], [1e6, "juta"], [1e3, "ribu"]];
+  const out = [];
+  for (const [nilai, nama] of skala) {
+    const q = Math.floor(x / nilai);
+    if (q > 0) {
+      out.push(nama === "ribu" && q === 1 ? "seribu" : bagian(q) + " " + nama);
+      x %= nilai;
+    }
+  }
+  if (x > 0) out.push(ratusan(x));
+  return out.join(" ");
+}
+
+function terbilang(n) {
+  if (n === 0) return "nol";
+  return n < 0 ? "minus " + bagian(-n) : bagian(n);
+}
+
+const inputAngka = document.getElementById("inputAngka");
+const hasilTerbilang = document.getElementById("hasilTerbilang");
+const formatSalin = document.getElementById("formatSalin");
+const btnSalinTerbilang = document.getElementById("btnSalinTerbilang");
+let teksAsli = "";
+let nilaiTerbilang = null;
+
+function tampilkanHasil() {
+  if (nilaiTerbilang === null) {
+    hasilTerbilang.className = "hasil kosong";
+    hasilTerbilang.textContent = "Hasil akan muncul di sini.";
+    return;
+  }
+  hasilTerbilang.className = "hasil";
+  hasilTerbilang.innerHTML =
+    escapeHtml(formatTeks(teksAsli, formatSalin.value)) + "<small>" + formatRp(nilaiTerbilang) + "</small>";
+}
+
+function prosesTerbilang() {
+  nilaiTerbilang = parseAngka(inputAngka.value);
+  if (nilaiTerbilang === null) {
+    teksAsli = "";
+  } else {
+    const kata = terbilang(nilaiTerbilang);
+    teksAsli = kata.charAt(0).toUpperCase() + kata.slice(1) + " rupiah";
+  }
+  tampilkanHasil();
+}
+
+document.getElementById("btnTerbilang").addEventListener("click", prosesTerbilang);
+inputAngka.addEventListener("keydown", e => { if (e.key === "Enter") prosesTerbilang(); });
+inputAngka.addEventListener("input", prosesTerbilang);
+formatSalin.addEventListener("change", tampilkanHasil);
+
+btnSalinTerbilang.addEventListener("click", () => {
+  if (!teksAsli) return;
+  salinTeks(formatTeks(teksAsli, formatSalin.value));
+  btnSalinTerbilang.textContent = "Tersalin!";
+  setTimeout(() => (btnSalinTerbilang.textContent = "Salin hasil"), 1500);
+});
+</script>
+</body>
+</html>

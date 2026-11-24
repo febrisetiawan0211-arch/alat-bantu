@@ -72,6 +72,7 @@ td.angka,th.angka{text-align:right}
   <form id="form">
     <div class="formulir" id="fieldWrap"></div>
     <div class="bar">
+      <label class="cek"><input type="checkbox" name="tanpaPajak"> Tidak ada pemungutan pajak</label>
       <label class="cek"><input type="checkbox" name="bupot"> Bupot dibuat</label>
       <label class="cek"><input type="checkbox" name="faktur"> Faktur pajak (PPN) dilaporkan</label>
       <label class="cek"><input type="checkbox" name="sintag"> Sudah di Sintag</label>
@@ -100,7 +101,7 @@ td.angka,th.angka{text-align:right}
     <div class="kolom">
       <div class="baris"><span>Masuk ke</span><select id="gupPool"><option value="UP">Saldo UP (GUP)</option><option value="TUP">Saldo TUP</option></select></div>
       <div class="baris"><span>Keterangan</span><input type="text" id="gupKet" placeholder="No. SPM/SP2D, dll"></div>
-      <div class="baris"><span></span><div class="bar"><button class="utama" onclick="tambahGup()">Tambah GUP/TUP</button><span id="pesanGup" style="color:var(--redup)"></span></div></div>
+      <div class="baris"><span></span><div class="bar"><button class="utama" onclick="tambahGup()" id="btnGup">Tambah GUP/TUP</button><span id="pesanGup" style="color:var(--redup)"></span></div></div>
     </div>
   </div>
   <div class="tabel-wrap" style="margin-top:12px">
@@ -233,14 +234,23 @@ window.tambahGup = () => {
   const ket = document.getElementById("gupKet").value.trim();
   const pesan = document.getElementById("pesanGup");
   if (!tgl || jml <= 0) { pesan.textContent = "Isi tanggal dan jumlah GUP."; return; }
-  gup.push({ id: Date.now(), tanggal: tgl, jumlah: jml, pool: document.getElementById("gupPool").value, keterangan: ket });
+  const pool = document.getElementById("gupPool").value;
+  if (gupEditId !== null) {
+    gup = gup.map(g => g.id === gupEditId ? { ...g, tanggal: tgl, jumlah: jml, pool, keterangan: ket } : g);
+    gupEditId = null;
+    pesan.textContent = "Perubahan disimpan.";
+  } else {
+    gup.push({ id: Date.now(), tanggal: tgl, jumlah: jml, pool, keterangan: ket });
+    pesan.textContent = "GUP ditambahkan.";
+  }
   simpanData();
   document.getElementById("gupJumlah").value = "";
   document.getElementById("gupKet").value = "";
-  pesan.textContent = "GUP ditambahkan.";
+  document.getElementById("btnGup").textContent = "Tambah GUP/TUP";
   tampilkanSemua();
 };
 
+let gupEditId = null;
 let gupHalaman = 1;
 let gupUkuran = 10;
 
@@ -249,6 +259,20 @@ document.getElementById("ukuranGup").addEventListener("change", e => {
   gupHalaman = 1;
   tampilkanSemua();
 });
+
+// Mengisi formulir dengan data pengajuan yang akan diubah
+window.ubahGup = id => {
+  const g = gup.find(x => x.id === id);
+  if (!g) return;
+  gupEditId = id;
+  document.getElementById("gupTanggal").value = g.tanggal;
+  document.getElementById("gupJumlah").value = g.jumlah;
+  document.getElementById("gupPool").value = g.pool || "UP";
+  document.getElementById("gupKet").value = g.keterangan || "";
+  document.getElementById("btnGup").textContent = "Simpan perubahan";
+  document.getElementById("pesanGup").textContent = `Mengubah pengajuan tanggal ${g.tanggal}`;
+  document.getElementById("gupTanggal").scrollIntoView({ behavior: "smooth", block: "center" });
+};
 
 window.pindahGup = n => {
   gupHalaman = n;
@@ -303,7 +327,7 @@ function tampilkanKas() {
   const daftar = semuaGup.slice(dariG, dariG + gupUkuran);
   tampilkanPagerGup(semuaGup.length, jumlahGup);
   document.getElementById("tbodyGup").innerHTML = daftar.map(g =>
-    `<tr><td>${esc(g.tanggal)}</td><td class="angka">${rupiah(g.jumlah)}</td><td>${g.pool || "UP"}</td><td>${esc(g.keterangan)}</td><td><button class="kecil bahaya" onclick="hapusGup(${g.id})">Hapus</button></td></tr>`
+    `<tr><td>${esc(g.tanggal)}</td><td class="angka">${rupiah(g.jumlah)}</td><td>${g.pool || "UP"}</td><td>${esc(g.keterangan)}</td><td><button class="kecil" onclick="ubahGup(${g.id})">Ubah</button> <button class="kecil bahaya" onclick="hapusGup(${g.id})">Hapus</button></td></tr>`
   ).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--redup)">Belum ada GUP.</td></tr>`;
 }
 
@@ -339,7 +363,7 @@ function batasSetor(tgl) {
 
 // Status berdasarkan checklist
 function statusRecord(r) {
-  const adaPph = angka(r.pph21) + angka(r.pph22) + angka(r.pph23) > 0;
+  const adaPph = !r.tanpaPajak && angka(r.pph21) + angka(r.pph22) + angka(r.pph23) > 0;
   if (adaPph && !r.bupot) return "Belum Bupot";
   if (r.registerBayar && r.tglBayar) return "Lunas";
   if (r.registerBayar) return "Dikirim";
@@ -377,11 +401,11 @@ fieldWrap.addEventListener("input", () => PAJAK_DPP.forEach(p => hitungPajakTamp
 fieldWrap.addEventListener("change", () => PAJAK_DPP.forEach(p => hitungPajakTampil(p.id)));
 
 // Urutan tampilan mengikuti header Excel: kolom kiri turun ke bawah, lalu kolom kanan turun ke bawah
-const URUTAN = ["tanggal","noReg","penagih","jenis","ppk","noSpby","bruto","pph21","22","23","Ppn","keterangan","noKuitansi","sintag","pungut","setorSakti","registerBilling","tglSetor","registerBayar","tglBayar","uraian","kodeAkun","npwp","bupot","faktur"];
+const URUTAN = ["tanggal","noReg","penagih","jenis","ppk","noSpby","bruto","pph21","22","23","Ppn","keterangan","noKuitansi","sintag","pungut","setorSakti","registerBilling","tglSetor","registerBayar","tglBayar","uraian","kodeAkun","npwp","bupot","faktur","tanpaPajak"];
 function elemenUrutan(k) {
   if (["22","23","Ppn"].includes(k)) return document.getElementById("tampil" + k).closest("div");
   const el = form.elements[k];
-  return CEKLIS.some(([n]) => n === k) ? el.closest("label") : el.closest(".baris");
+  return (CEKLIS.some(([n]) => n === k) || k === "tanpaPajak") ? el.closest("label") : el.closest(".baris");
 }
 const kiri = document.createElement("div"), kanan = document.createElement("div");
 kiri.className = kanan.className = "kolom";
@@ -402,6 +426,7 @@ function bacaForm() {
   const r = {};
   FIELD.forEach(([nama]) => r[nama] = fd.get(nama) || "");
   CEKLIS.forEach(([nama]) => r[nama] = form.elements[nama].checked);
+  r.tanpaPajak = form.elements.tanpaPajak.checked;
   PAJAK_DPP.forEach(p => {
     const ada = form.elements["ada" + p.id].checked;
     r["ada" + p.id] = ada;
@@ -415,6 +440,7 @@ function bacaForm() {
 function isiForm(r) {
   FIELD.forEach(([nama]) => form.elements[nama].value = r[nama] ?? "");
   CEKLIS.forEach(([nama]) => form.elements[nama].checked = !!r[nama]);
+  form.elements.tanpaPajak.checked = !!r.tanpaPajak;
   PAJAK_DPP.forEach(p => {
     const pajakLama = angka(r[p.pajak]);
     const tarif = r["tarif" + p.id] ?? p.tarif;
@@ -437,6 +463,7 @@ function resetForm() {
 form.addEventListener("submit", e => {
   e.preventDefault();
   const r = bacaForm();
+  if (r.tanpaPajak) nolkanPajak(r);
   if (!r.noReg.trim()) return tampilPesan("Nomor register wajib diisi.");
   const duplikat = data.some(x => x.noReg === r.noReg && x.id !== editId);
   if (duplikat) return tampilPesan("Nomor register " + r.noReg + " sudah ada. Periksa kembali.");
@@ -517,6 +544,24 @@ function tampilkanPager(total, jumlahHalaman) {
   document.getElementById("pager").innerHTML = html;
 }
 
+// Pajak berlaku hanya jika SPJ tidak ditandai "tanpa pemungutan" dan ada nilai pajak
+const adaPajakRecord = r => !r.tanpaPajak && angka(r.pph21) + angka(r.pph22) + angka(r.pph23) + angka(r.ppn) > 0;
+const adaPphRecord = r => !r.tanpaPajak && angka(r.pph21) + angka(r.pph22) + angka(r.pph23) > 0;
+
+// Ceklis yang tidak berlaku untuk SPJ ini ditampilkan "–"
+function berlaku(r, n) {
+  if (n === "sintag" || n === "registerBayar") return true;
+  if (n === "faktur") return !r.tanpaPajak && angka(r.ppn) > 0;
+  if (n === "bupot") return adaPphRecord(r);
+  return adaPajakRecord(r);
+}
+
+// SPJ tanpa pemungutan: semua nilai pajak dinolkan
+function nolkanPajak(r) {
+  ["pph21", "pph22", "pph23", "ppn"].forEach(k => r[k] = 0);
+  PAJAK_DPP.forEach(p => { r["ada" + p.id] = false; r["dpp" + p.id] = 0; });
+}
+
 function tampilkanTabel(baris, mulai = 0) {
   const tbody = document.getElementById("tbody");
   const sisa = hitungKas().sisa;
@@ -538,7 +583,7 @@ function tampilkanTabel(baris, mulai = 0) {
       <td class="angka">${rupiah(r.deposit)}</td>
       <td class="angka">${rupiah(r.netto)}</td>
       <td class="angka">${sisa[r.id] == null ? "-" : rupiah(sisa[r.id])}</td>
-      ${CEKLIS.map(([n]) => `<td class="centang">${r[n] ? "✓" : ""}</td>`).join("")}
+      ${CEKLIS.map(([n]) => `<td class="centang">${!berlaku(r, n) ? "–" : (r[n] ? "✓" : "")}</td>`).join("")}
       <td><span class="status ${kelasStatus(st)}">${st}</span></td>
       <td>
         <button class="kecil" onclick="ubah(${r.id})">Ubah</button>
@@ -585,7 +630,7 @@ window.ubah = id => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
-const LABEL_CEKLIS = {bupot: "Bupot dibuat", faktur: "Faktur pajak dilaporkan", sintag: "Sudah di Sintag", pungut: "Pajak dipungut", setorSakti: "Pajak disetor (SAKTI)", registerBilling: "Pajak sudah disetor", registerBayar: "SPJ sudah dibayar"};
+const LABEL_CEKLIS = {bupot: "Bupot dibuat", faktur: "Faktur pajak dilaporkan", sintag: "Sudah di Sintag", pungut: "Pajak dipungut", setorSakti: "Pajak disetor (SAKTI)", tanpaPajak: "Tidak ada pemungutan pajak", registerBilling: "Pajak sudah disetor", registerBayar: "SPJ sudah dibayar"};
 
 // Membandingkan data lama dan baru, lalu menghasilkan daftar catatan perubahan
 function perubahan(lama, baru) {

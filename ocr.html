@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gambar ke Teks</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<style>
+  :root{--aksen:#0f766e;--aksen-gelap:#0b5a54;--aksen-muda:#ecfdf5;--latar:#f8fafc;--teks:#1e293b;--redup:#64748b;--garis:#e2e8f0;--merah:#b91c1c;--merah-muda:#fef2f2}
+  *{box-sizing:border-box}
+  body{font-family:Cambria,Georgia,serif;margin:0;background:var(--latar);color:var(--teks);padding:24px;line-height:1.5}
+  button,input,select,textarea{font-family:inherit}
+  .judul h2{margin:0 0 4px;font-size:22px}
+  .judul p{margin:0 0 20px;color:var(--redup);font-size:14px}
+  .kartu{background:#fff;border-radius:16px;padding:24px;margin-bottom:18px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 6px 18px rgba(0,0,0,.05)}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .label-mode{font-size:14px;color:var(--redup)}
+  input[type=text]{padding:10px 12px;font-size:14px;border:1px solid var(--garis);border-radius:10px;outline:none}
+  input[type=text]:focus{border-color:var(--aksen);box-shadow:0 0 0 3px rgba(15,118,110,.15)}
+  select{padding:10px 12px;font-size:14px;border:1px solid var(--garis);border-radius:10px;background:#fff}
+  textarea{width:100%;min-height:180px;padding:12px 14px;font-size:15px;border:1px solid var(--garis);border-radius:10px;resize:vertical;outline:none}
+  textarea:focus{border-color:var(--aksen);box-shadow:0 0 0 3px rgba(15,118,110,.15)}
+  button.utama{background:var(--aksen);color:#fff;border:none;padding:11px 20px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600}
+  button.utama:hover{background:var(--aksen-gelap)}
+  button.sekunder{background:#fff;color:var(--teks);border:1px solid var(--garis);padding:10px 16px;border-radius:10px;cursor:pointer;font-size:14px}
+  button.sekunder:hover{background:var(--latar)}
+  button.hapus{background:none;border:none;color:var(--redup);cursor:pointer;font-size:16px;padding:4px 8px;border-radius:6px}
+  button.hapus:hover{background:var(--merah-muda);color:var(--merah)}
+  .zona{border:2px dashed #cbd5e1;border-radius:16px;padding:36px 20px;text-align:center;color:var(--redup);background:#fcfdfe;cursor:pointer;transition:all .15s;margin-bottom:14px}
+  .zona:hover,.zona:focus{border-color:var(--aksen);background:var(--aksen-muda);color:var(--teks);outline:none}
+  .zona .ikon-besar{font-size:34px;display:block;margin-bottom:6px}
+  .zona b{color:var(--aksen-gelap)}
+  .status{font-size:14px;color:var(--redup);margin:12px 0 0;min-height:20px}
+  .status.sukses{color:#15803d}
+  .status.gagal{color:var(--merah)}
+  .pengaturan{display:flex;gap:16px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .pengaturan input[type=range]{width:220px;vertical-align:middle}
+  table.hasil-tabel{width:100%;border-collapse:collapse;font-size:14px}
+  table.hasil-tabel th,table.hasil-tabel td{border:1px solid var(--garis);padding:4px;text-align:left}
+  table.hasil-tabel th.nomor,table.hasil-tabel td.nomor{width:40px;text-align:center;color:var(--redup);font-size:12px}
+  table.hasil-tabel th{background:#f1f5f9;font-weight:600}
+  table.hasil-tabel input{width:100%;min-width:90px;border:1px solid transparent;padding:6px 8px;font-size:14px;background:transparent;border-radius:6px;color:var(--teks)}
+  table.hasil-tabel input:hover{border-color:var(--garis)}
+  table.hasil-tabel input:focus{border-color:var(--aksen);background:#fff;outline:none}
+  table.hasil-tabel tbody tr:hover{background:#f8fffd}
+  .kosong-tabel{text-align:center;color:var(--redup);padding:24px}
+  .aksi-tabel{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+  .ringkasan{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;background:var(--latar);border-radius:12px;padding:14px 18px;margin-top:16px}
+</style>
+</head>
+<body>
+
+<div class="judul">
+  <h2>Gambar ke Teks</h2>
+  <p>Tempel gambar tabel. Hasilnya berisi nama, NPWP, dan jumlah bruto atau nilai per orang.</p>
+</div>
+
+<div class="kartu">
+  <div class="zona" id="zonaTempel" tabindex="0">
+    <span class="ikon-besar">📋</span>
+    Klik area ini lalu tekan <b>Ctrl+V</b> untuk menempel gambar<br>
+    atau <b>pilih file gambar</b> di bawah
+  </div>
+  <div class="bar">
+    <input type="file" id="fileGambar" accept="image/*">
+    <span class="label-mode">Mode:</span>
+    <select id="modeOCR">
+      <option value="sbpep">SBPEP Pemeriksa</option>
+      <option value="transfer">Uang Makan PPPK</option>
+      <option value="otomatis">Otomatis</option>
+      <option value="teks">Teks</option>
+      <option value="tabel">Tabel</option>
+    </select>
+  </div>
+  <div class="status" id="statusOCR">Belum ada gambar.</div>
+</div>
+
+<div class="kartu" id="kartuTeks" style="display:none">
+  <textarea id="areaTeks" placeholder="Hasil teks akan muncul di sini."></textarea>
+  <div class="ringkasan">
+    <span class="label-mode">Teks bisa langsung diedit sebelum disalin.</span>
+    <button class="utama" id="btnSalinTeks">Salin teks</button>
+  </div>
+</div>
+
+<div class="kartu" id="kartuTabel" style="display:none">
+  <div class="pengaturan">
+    <label class="label-mode">
+      <input type="checkbox" id="cekHeader" checked> Baris pertama sebagai judul kolom
+    </label>
+    <label class="label-mode">
+      Jarak pemisah kolom:
+      <input type="range" id="rentangKolom" min="0.5" max="3" step="0.1" value="1">
+      <span id="nilaiRentang">1.0</span>
+    </label>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="hasil-tabel">
+      <thead id="theadTabel"></thead>
+      <tbody id="tbodyTabel"></tbody>
+    </table>
+  </div>
+  <div id="kosongTabel" class="kosong-tabel" style="display:none">Belum ada data.</div>
+  <div class="aksi-tabel">
+    <button class="sekunder" id="btnTambahBaris">+ Tambah Baris</button>
+    <button class="sekunder" id="btnTambahKolom">+ Tambah Kolom</button>
+  </div>
+  <div class="ringkasan">
+    <span class="label-mode" id="infoTabel"></span>
+    <button class="utama" id="btnSalinTabel">Salin ke Excel</button>
+  </div>
+</div>
+
+<script>
+function salinTeks(teks) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(teks);
+  }
+  const ta = document.createElement("textarea");
+  ta.value = teks;
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
+  return Promise.resolve();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+const statusOCR = document.getElementById("statusOCR");
+const zona = document.getElementById("zonaTempel");
+const modeOCR = document.getElementById("modeOCR");
+const kartuTeks = document.getElementById("kartuTeks");
+const kartuTabel = document.getElementById("kartuTabel");
+const areaTeks = document.getElementById("areaTeks");
+const theadTabel = document.getElementById("theadTabel");
+const tbodyTabel = document.getElementById("tbodyTabel");
+const kosongTabel = document.getElementById("kosongTabel");
+const cekHeader = document.getElementById("cekHeader");
+const rentangKolom = document.getElementById("rentangKolom");
+const nilaiRentang = document.getElementById("nilaiRentang");
+const infoTabel = document.getElementById("infoTabel");
+
+let worker = null;
+let terakhirData = null;
+let kataTerakhir = [];
+let tabelData = [];
+let adaHasil = false;
+let kolomTabel = 0;
+
+function setStatus(pesan, jenis = "") {
+  statusOCR.className = "status " + jenis;
+  statusOCR.textContent = pesan;
+}
+
+async function ambilWorker() {
+  if (!worker) {
+    worker = await Tesseract.createWorker("ind+eng", 1, {
+      logger: m => {
+        if (m.status === "recognizing text") {
+          setStatus("Membaca gambar... " + Math.round(m.progress * 100) + "%");
+        }
+      }
+    });
+    await worker.setParameters({ preserve_interword_spaces: "1" });
+  }
+  return worker;
+}
+
+async function siapkanGambar(file) {
+  const bmp = await createImageBitmap(file);
+  const TARGET_LEBAR = 3000;
+  const skala = Math.min(4, Math.max(2, TARGET_LEBAR / bmp.width));
+  const pad = Math.round(20 * skala);
+
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * skala) + pad * 2;
+  c.height = Math.round(bmp.height * skala) + pad * 2;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bmp, pad, pad, c.width - pad * 2, c.height - pad * 2);
+
+  const img = ctx.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  const hist = new Array(256).fill(0);
+  for (let i = 0; i < d.length; i += 4) {
+    const g = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
+    d[i] = d[i + 1] = d[i + 2] = g;
+    hist[g]++;
+  }
+  const total = c.width * c.height;
+  let lo = 0, hi = 255, acc = 0;
+  for (let g = 0; g < 256; g++) { acc += hist[g]; if (acc / total > 0.02) { lo = g; break; } }
+  acc = 0;
+  for (let g = 255; g >= 0; g--) { acc += hist[g]; if (acc / total > 0.02) { hi = g; break; } }
+  const rentang = Math.max(1, hi - lo);
+  for (let i = 0; i < d.length; i += 4) {
+    const v = Math.max(0, Math.min(255, ((d[i] - lo) / rentang) * 255));
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
+function ambilKata(data) {
+  if (!data) return [];
+  if (Array.isArray(data.words) && data.words.length) return data.words;
+  const out = [];
+  (data.blocks || []).forEach(b =>
+    (b.paragraphs || []).forEach(p =>
+      (p.lines || []).forEach(l =>
+        (l.words || []).forEach(w => out.push(w))
+      )
+    )
+  );
+  return out;
+}
+
+async function bacaGambar(canvas) {
+  const w = await ambilWorker();
+  const percobaan = ["6", "11"];
+  let terbaik = null;
+
+  for (const mode of percobaan) {
+    setStatus("Membaca gambar (mode " + mode + ")... 0%");
+    await w.setParameters({ tessedit_pageseg_mode: mode });
+    const hasil = await w.recognize(canvas, {}, { text: true, blocks: true });
+    const data = hasil && hasil.data ? hasil.data : null;
+    if (!data) continue;
+    const jumlahKata = ambilKata(data).filter(k => k.text && k.text.trim()).length;
+    if (!terbaik || jumlahKata > terbaik.jumlahKata) {
+      terbaik = { data, jumlahKata };
+    }
+    if (jumlahKata >= 40) break;
+  }
+
+  if (!terbaik) throw new Error("OCR tidak menghasilkan data");
+  return terbaik.data;
+}
+
+function median(arr) {
+  if (!arr.length) return 0;
+  const s = [...arr].sort((a, b) => a - b);
+  const tengah = Math.floor(s.length / 2);
+  return s.length % 2 ? s[tengah] : (s[tengah - 1] + s[tengah]) / 2;
+}
+
+function buatTabel(kata, faktor) {
+  const valid = kata.filter(w => w.text && w.text.trim() && w.bbox);
+  if (!valid.length) return [];
+
+  const tinggi = median(valid.map(w => w.bbox.y1 - w.bbox.y0)) || 10;
+  const yTengah = w => (w.bbox.y0 + w.bbox.y1) / 2;
+
+  const urut = [...valid].sort((a, b) => yTengah(a) - yTengah(b));
+  const kelompok = [];
+  for (const w of urut) {
+    const terakhir = kelompok[kelompok.length - 1];
+    if (terakhir && Math.abs(yTengah(w) - terakhir.y) < tinggi * 0.5) {
+      terakhir.items.push(w);
+      terakhir.y = terakhir.items.reduce((s, k) => s + yTengah(k), 0) / terakhir.items.length;
+    } else {
+      kelompok.push({ y: yTengah(w), items: [w] });
+    }
+  }
+
+  const ambang = tinggi * faktor;
+
+  return kelompok.map(b => {
+    const items = b.items.sort((a, c) => a.bbox.x0 - c.bbox.x0);
+    const sel = [];
+    let cur = null;
+    for (const w of items) {
+      if (cur && w.bbox.x0 - cur.x1 <= ambang) {
+        cur.teks.push(w.text.trim());
+        cur.x1 = w.bbox.x1;
+      } else {
+        cur = { teks: [w.text.trim()], x1: w.bbox.x1 };
+        sel.push(cur);
+      }
+    }
+    return sel.map(c => c.teks.join(" "));
+  });
+}
+
+function parseAngka(teks) {
+  const digit = (teks || "").replace(/[^\d]/g, "");
+  return digit ? parseInt(digit, 10) : null;
+}
+
+function cariBruto(angka) {
+  if (!angka.length) return null;
+  return Math.max(...angka);
+}
+
+function parseSBPEP(data) {
+  const garis = (data.lines && data.lines.length)
+    ? data.lines.map(l => l.text.trim())
+    : (data.text || "").split("\n").map(s => s.trim());
+
+  const rxUang = /\d{1,3}(?:\.\d{3})+/g;
+  const rxNama = /^[A-Za-z][A-Za-z.' ]{4,}$/;
+  const rxLabel = /\b(NIP|NPWP|NIK|JABATAN|TANGGAL|TARIF|BRUTO|NETO|TIM|ANGGOTA|KETUA|SUB|AGUSTUS|HARI|GOL|TGL)\b/i;
+
+  const barisData = [];
+  garis.forEach((t, i) => {
+    if (/JUMLAH/i.test(t)) return;
+    const nilai = t.match(rxUang) || [];
+    if (nilai.length >= 2) barisData.push(i);
+  });
+
+  const kandidatNpwp = [];
+  garis.forEach((t, j) => {
+    const bersih = t.replace(/(?<=\d)[\s.\-](?=\d)/g, "");
+    const cocok = bersih.match(/(?<!\d)\d{12,16}(?!\d)/g) || [];
+    cocok.forEach(v => kandidatNpwp.push({ j, v, panjang: v.length }));
+  });
+
+  const pasangan = [];
+  kandidatNpwp.forEach(p => {
+    barisData.forEach((i, k) => pasangan.push({ p, k, jarak: Math.abs(p.j - i) }));
+  });
+  pasangan.sort((a, b) => a.jarak - b.jarak);
+
+  const npwpPerOrang = new Array(barisData.length).fill("");
+  const sudahDipakai = new Set();
+  for (const x of pasangan) {
+    if (npwpPerOrang[x.k] || sudahDipakai.has(x.p)) continue;
+    npwpPerOrang[x.k] = x.p.v;
+    sudahDipakai.add(x.p);
+  }
+
+  const hasil = [];
+  barisData.forEach((i, k) => {
+    const batasAtas = k > 0 ? barisData[k - 1] + 1 : 0;
+    const batasBawah = k + 1 < barisData.length ? barisData[k + 1] - 1 : garis.length - 1;
+
+    const angka = (garis[i].match(rxUang) || []).map(s => parseAngka(s));
+    const bruto = cariBruto(angka);
+
+    let nama = "";
+    const urutanCari = [];
+    for (let j = i; j >= Math.max(batasAtas, i - 5); j--) urutanCari.push(j);
+    for (let j = i + 1; j <= Math.min(batasBawah, i + 2); j++) urutanCari.push(j);
+    for (const j of urutanCari) {
+      const c = garis[j].replace(/^[\d\s.|_:]+/, "").replace(/[|_]/g, "").replace(/[^A-Za-z]+$/, "").trim();
+      if (rxNama.test(c) && !rxLabel.test(c)) { nama = c; break; }
+    }
+
+    hasil.push([
+      nama || "(nama tidak terbaca)",
+      npwpPerOrang[k],
+      bruto === null ? "" : String(bruto)
+    ]);
+  });
+
+  return hasil;
+}
+
+function parseUangMakanPPPK(data) {
+  const garis = (data.lines && data.lines.length)
+    ? data.lines.map(l => l.text.trim())
+    : (data.text || "").split("\n").map(s => s.trim());
+
+  const rxNpwp = /(?<!\d)\d{15,16}(?!\d)/g;
+  const rxNilai = /\d{1,3}(?:\.\d{3})+(?:,\d{2})?/g;
+  const rxNama = /^[A-Za-z][A-Za-z .'\-]{3,}$/;
+  const rxLabel = /\b(NAMA|PENERIMA|REKENING|NPWP|NILAI|RUPIAH|JUMLAH|TOTAL|NO)\b/i;
+
+  const npwpList = [];
+  garis.forEach((t, j) => {
+    const bersih = t.replace(/(?<=\d)[\s.\-](?=\d)/g, "");
+    (bersih.match(rxNpwp) || []).forEach(v => npwpList.push({ j, v }));
+  });
+
+  const nilaiList = [];
+  garis.forEach((t, j) => {
+    (t.match(rxNilai) || []).forEach(s => {
+      const bulat = parseInt(s.split(",")[0].replace(/\./g, ""), 10);
+      if (bulat > 0) nilaiList.push({ j, n: bulat, used: false });
+    });
+  });
+
+  const pasangan = [];
+  npwpList.forEach((p, a) => {
+    nilaiList.forEach((q, b) => {
+      const jarak = Math.abs(p.j - q.j);
+      if (jarak <= 3) pasangan.push({ a, b, jarak });
+    });
+  });
+  pasangan.sort((x, y) => x.jarak - y.jarak);
+
+  const nilaiUntuk = new Array(npwpList.length).fill(null);
+  for (const x of pasangan) {
+    if (nilaiUntuk[x.a] !== null || nilaiList[x.b].used) continue;
+    nilaiUntuk[x.a] = nilaiList[x.b].n;
+    nilaiList[x.b].used = true;
+  }
+
+  function cariNama(j) {
+    for (let k = j; k >= Math.max(0, j - 3); k--) {
+      const raw = garis[k];
+      if (k !== j) {
+        const bersihRaw = raw.replace(/(?<=\d)[\s.\-](?=\d)/g, "");
+        if (/(?<!\d)\d{15,16}(?!\d)/.test(bersihRaw)) break;
+      }
+      const t = raw
+        .replace(/^\s*\d+[.)\s]*/, "")
+        .replace(/[|_:]/g, "")
+        .replace(/\d/g, "")
+        .trim();
+      if (rxNama.test(t) && !rxLabel.test(t)) return t;
+    }
+    return "";
+  }
+
+  return npwpList.map((p, idx) => [
+    cariNama(p.j) || "(nama tidak terbaca)",
+    p.v,
+    nilaiUntuk[idx] === null ? "" : String(nilaiUntuk[idx])
+  ]);
+}
+
+const HEADER_SBPEP = ["Nama Lengkap", "NPWP", "Jumlah Bruto (Rp)"];
+const HEADER_UANG_MAKAN = ["Nama Penerima", "NPWP", "Nilai (Rp)"];
+
+function apakahTabel(baris) {
+  if (baris.length < 2) return false;
+  const banyakKolom = baris.filter(r => r.length >= 2).length;
+  return banyakKolom / baris.length >= 0.5;
+}
+
+function samakanKolom(data) {
+  const maks = Math.max(1, ...data.map(r => r.length));
+  return data.map(r => {
+    const salinan = [...r];
+    while (salinan.length < maks) salinan.push("");
+    return salinan;
+  });
+}
+
+function teksDariTabel() {
+  return tabelData.map(r => r.join("  ")).join("\n");
+}
+
+function tampilkanDariData() {
+  if (!adaHasil) return;
+  const mode = modeOCR.value;
+  let bentuk;
+
+  if (mode === "sbpep") {
+    bentuk = "sbpep";
+    cekHeader.checked = true;
+    const rows = terakhirData ? parseSBPEP(terakhirData) : [];
+    tabelData = [HEADER_SBPEP, ...rows];
+  } else if (mode === "transfer") {
+    bentuk = "transfer";
+    cekHeader.checked = true;
+    const rows = terakhirData ? parseUangMakanPPPK(terakhirData) : [];
+    tabelData = [HEADER_UANG_MAKAN, ...rows];
+  } else {
+    const dariKata = buatTabel(kataTerakhir, Number(rentangKolom.value));
+    tabelData = dariKata.length
+      ? dariKata
+      : (terakhirData?.text || "").split("\n").filter(s => s.trim()).map(s => [s.trim()]);
+    bentuk = mode === "tabel" || (mode === "otomatis" && apakahTabel(tabelData)) ? "tabel" : "teks";
+  }
+
+  if (bentuk === "teks") {
+    kartuTabel.style.display = "none";
+    kartuTeks.style.display = "block";
+    areaTeks.value = teksDariTabel();
+  } else {
+    kartuTeks.style.display = "none";
+    kartuTabel.style.display = "block";
+    renderTabel();
+  }
+
+  return bentuk;
+}
+
+function renderTabel() {
+  tabelData = samakanKolom(tabelData);
+  kolomTabel = Math.max(1, ...tabelData.map(r => r.length));
+  const adaJudul = cekHeader.checked && tabelData.length > 0;
+
+  let htmlHead = "<tr><th class='nomor'>No</th>";
+  for (let c = 0; c < kolomTabel; c++) {
+    if (adaJudul) {
+      htmlHead += `<th><input type="text" value="${escapeHtml(tabelData[0][c])}" data-r="0" data-c="${c}"></th>`;
+    } else {
+      htmlHead += `<th>Kolom ${c + 1}</th>`;
+    }
+  }
+  htmlHead += "<th style='width:36px'></th></tr>";
+  theadTabel.innerHTML = htmlHead;
+
+  const mulai = adaJudul ? 1 : 0;
+  let htmlBody = "";
+  for (let r = mulai; r < tabelData.length; r++) {
+    htmlBody += `<tr><td class="nomor">${r - mulai + 1}</td>`;
+    for (let c = 0; c < kolomTabel; c++) {
+      htmlBody += `<td><input type="text" value="${escapeHtml(tabelData[r][c])}" data-r="${r}" data-c="${c}"></td>`;
+    }
+    htmlBody += `<td><button class="hapus" data-hapus="${r}" title="Hapus baris">✕</button></td></tr>`;
+  }
+  tbodyTabel.innerHTML = htmlBody;
+
+  kosongTabel.style.display = tabelData.length > (adaJudul ? 1 : 0) ? "none" : "block";
+  const jumlahBaris = Math.max(0, tabelData.length - (adaJudul ? 1 : 0));
+  infoTabel.textContent = jumlahBaris + " baris, " + kolomTabel + " kolom";
+}
+
+function bentukTSV() {
+  return tabelData.map(r => r.map(s => String(s).replace(/[\t\n]/g, " ")).join("\t")).join("\n");
+}
+
+function catatEdit(e) {
+  const el = e.target;
+  if (el.dataset.r === undefined) return;
+  tabelData[Number(el.dataset.r)][Number(el.dataset.c)] = el.value;
+}
+tbodyTabel.addEventListener("input", catatEdit);
+theadTabel.addEventListener("input", catatEdit);
+
+tbodyTabel.addEventListener("click", e => {
+  const idx = e.target.dataset.hapus;
+  if (idx !== undefined) {
+    tabelData.splice(Number(idx), 1);
+    renderTabel();
+  }
+});
+
+cekHeader.addEventListener("change", renderTabel);
+
+rentangKolom.addEventListener("input", () => {
+  nilaiRentang.textContent = Number(rentangKolom.value).toFixed(1);
+});
+rentangKolom.addEventListener("change", () => {
+  if (modeOCR.value === "sbpep" || modeOCR.value === "transfer" || !kataTerakhir.length) return;
+  tampilkanDariData();
+  setStatus("Kolom dihitung ulang dengan jarak " + Number(rentangKolom.value).toFixed(1) + ".");
+});
+
+modeOCR.addEventListener("change", () => {
+  if (!adaHasil) return;
+  const bentuk = tampilkanDariData();
+  setStatus("Mode diganti. Ditampilkan sebagai " + bentuk + ".");
+});
+
+document.getElementById("btnTambahBaris").addEventListener("click", () => {
+  adaHasil = true;
+  tabelData.push(Array(Math.max(1, kolomTabel)).fill(""));
+  kartuTeks.style.display = "none";
+  kartuTabel.style.display = "block";
+  renderTabel();
+});
+
+document.getElementById("btnTambahKolom").addEventListener("click", () => {
+  adaHasil = true;
+  if (!tabelData.length) tabelData.push([""]);
+  tabelData = tabelData.map(r => [...r, ""]);
+  kartuTeks.style.display = "none";
+  kartuTabel.style.display = "block";
+  renderTabel();
+});
+
+areaTeks.addEventListener("input", () => {
+  tabelData = areaTeks.value.split("\n").map(baris => [baris]);
+});
+
+document.getElementById("btnSalinTeks").addEventListener("click", async () => {
+  try {
+    await salinTeks(areaTeks.value);
+    setStatus("Teks disalin.", "sukses");
+  } catch (err) {
+    setStatus("Gagal menyalin: " + err.message, "gagal");
+  }
+});
+
+document.getElementById("btnSalinTabel").addEventListener("click", async () => {
+  if (!tabelData.length) { setStatus("Belum ada data untuk disalin.", "gagal"); return; }
+  try {
+    await salinTeks(bentukTSV());
+    setStatus("Tabel disalin. Tempel di Excel dengan Ctrl+V.", "sukses");
+  } catch (err) {
+    setStatus("Gagal menyalin: " + err.message, "gagal");
+  }
+});
+
+async function prosesGambar(file) {
+  setStatus("Menyiapkan gambar...");
+  try {
+    const canvas = await siapkanGambar(file);
+    const data = await bacaGambar(canvas);
+
+    terakhirData = data;
+    kataTerakhir = ambilKata(data);
+
+    if (!(data.text || "").trim()) {
+      setStatus("Tidak ada teks yang terbaca. Coba gambar yang lebih besar atau lebih jelas.", "gagal");
+      return;
+    }
+
+    adaHasil = true;
+    const bentuk = tampilkanDariData();
+    const jumlahKata = kataTerakhir.filter(k => k.text && k.text.trim()).length;
+
+    if (bentuk === "sbpep" || bentuk === "transfer") {
+      const jumlah = tabelData.length - 1;
+      const label = bentuk === "sbpep" ? "orang" : "penerima";
+      setStatus(jumlah > 0
+        ? jumlah + " " + label + " terbaca (" + jumlahKata + " kata). Periksa lalu salin ke Excel."
+        : "Tidak ada data yang terbaca (" + jumlahKata + " kata). Coba gambar yang lebih besar.",
+        jumlah > 0 ? "sukses" : "gagal");
+    } else {
+      setStatus(tabelData.length + " baris terbaca sebagai " + bentuk + " (" + jumlahKata + " kata). Periksa lalu salin.", "sukses");
+    }
+  } catch (err) {
+    setStatus("Gagal membaca gambar: " + err.message, "gagal");
+  }
+}
+
+document.getElementById("fileGambar").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (file) prosesGambar(file);
+  e.target.value = "";
+});
+
+document.addEventListener("paste", e => {
+  const items = e.clipboardData ? e.clipboardData.items : [];
+  for (const item of items) {
+    if (item.type.startsWith("image/")) {
+      prosesGambar(item.getAsFile());
+      return;
+    }
+  }
+  setStatus("Clipboard tidak berisi gambar.", "gagal");
+});
+
+zona.addEventListener("click", () => zona.focus());
+</script>
+</body>
+</html>
