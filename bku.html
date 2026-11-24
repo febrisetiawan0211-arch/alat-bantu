@@ -898,6 +898,11 @@ function perbaruiBanner() {
 /* =========================================================
    INISIALISASI
    ========================================================= */
+// Tabel SPJ ditampilkan lebih dulu, lalu kartu Saldo Kas & GUP/TUP
+const kartuKas = document.getElementById("ringkasKas").closest(".kartu");
+const kartuSpj = document.getElementById("tbody").closest(".kartu");
+kartuSpj.after(kartuKas);
+
 isiFilterPPK();
 tampilkanSemua();
 perbaruiBanner();
