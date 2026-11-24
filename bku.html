@@ -116,6 +116,7 @@ td.angka,th.angka{text-align:right}
       <select id="ukuranGup"><option>10</option><option>20</option><option>30</option><option>50</option></select>
     </div>
     <span id="infoGup" style="color:var(--redup);font-size:12px"></span>
+    <button class="sekunder" onclick="eksporCsvGup()">Unduh CSV GUP/TUP</button>
   </div>
 </div>
 
@@ -272,6 +273,15 @@ window.ubahGup = id => {
   document.getElementById("btnGup").textContent = "Simpan perubahan";
   document.getElementById("pesanGup").textContent = `Mengubah pengajuan tanggal ${g.tanggal}`;
   document.getElementById("gupTanggal").scrollIntoView({ behavior: "smooth", block: "center" });
+};
+
+// Unduh seluruh daftar GUP/TUP (bukan hanya halaman yang tampil) dalam format CSV
+window.eksporCsvGup = () => {
+  const kolom = ["Tanggal", "Saldo", "Jumlah", "Keterangan"];
+  const baris = gup.slice().sort((a, b) => String(a.tanggal).localeCompare(String(b.tanggal)))
+    .map(g => [g.tanggal, g.pool || "UP", g.jumlah, g.keterangan || ""]
+      .map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+  unduh(`gup-tup-${stempelWaktu()}.csv`, "\uFEFF" + kolom.join(",") + "\n" + baris.join("\n"), "text/csv");
 };
 
 window.pindahGup = n => {
