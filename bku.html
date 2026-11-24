@@ -576,7 +576,7 @@ function tampilkanTabel(baris, mulai = 0) {
       <td>${mulai + i + 1}</td>
       <td>${esc(r.tanggal)}</td>
       <td>${esc(r.noReg)}</td>
-      <td>${esc(r.penagih)}</td>
+      <td>${esc(r.penagih)}${r.uraian ? `<div style="font-size:12px;color:var(--redup)">${esc(r.uraian)}</div>` : ""}</td>
       <td>${esc(r.ppk)}</td>
       <td>${esc(r.jenis)}</td>
       <td class="angka">${rupiah(r.bruto)}</td>
