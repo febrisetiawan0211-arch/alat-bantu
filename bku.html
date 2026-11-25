@@ -206,7 +206,7 @@ const FIELD = [
   ["ppk", "PPK", "select", PPK],
   ["noSpby", "No. SPBy (SAKTI)", "text"],
   ["uraian", "Uraian / keperluan", "text"],
-  ["kodeAkun", "Kode akun / MAK", "text"],
+
   ["bruto", "Nilai bruto (Rp)", "number"],
   ["pph21", "PPh 21 (Rp)", "number"],
   ["noKuitansi", "No. Kuitansi (SAKTI)", "text"],
@@ -483,7 +483,7 @@ fieldWrap.addEventListener("input", () => PAJAK_DPP.forEach(p => hitungPajakTamp
 fieldWrap.addEventListener("change", () => PAJAK_DPP.forEach(p => hitungPajakTampil(p.id)));
 
 // Urutan tampilan mengikuti header Excel: kolom kiri turun ke bawah, lalu kolom kanan turun ke bawah
-const URUTAN = ["tanggal","noReg","penagih","jenis","ppk","noSpby","bruto","pph21","22","23","Ppn","keterangan","noKuitansi","sintag","pungut","setorSakti","registerBilling","tglSetor","registerBayar","tglBayar","uraian","kodeAkun","npwp","bupot","faktur","tanpaPajak"];
+const URUTAN = ["tanggal","noReg","penagih","jenis","ppk","noSpby","bruto","pph21","22","23","Ppn","keterangan","noKuitansi","sintag","pungut","setorSakti","registerBilling","tglSetor","registerBayar","tglBayar","uraian","npwp","bupot","faktur","tanpaPajak"];
 function elemenUrutan(k) {
   if (["22","23","Ppn"].includes(k)) return document.getElementById("tampil" + k).closest("div");
   const el = form.elements[k];
@@ -1019,7 +1019,7 @@ document.getElementById("fileExcel").addEventListener("change", async e => {
 });
 
 document.getElementById("btnCSV").addEventListener("click", () => {
-  const kolom = ["tanggal","noReg","penagih","npwp","jenis","ppk","noSpby","uraian","kodeAkun","bruto","pph21","pph22","pph23","ppn","deposit","netto","dpp22","dpp23","noKuitansi","tglSetor","tglBayar","keterangan"];
+  const kolom = ["tanggal","noReg","penagih","npwp","jenis","ppk","noSpby","uraian","bruto","pph21","pph22","pph23","ppn","deposit","netto","dpp22","dpp23","noKuitansi","tglSetor","tglBayar","keterangan"];
   const baris = data.map(hitung).map(r => kolom.map(k => `"${String(r[k] ?? "").replace(/"/g, '""')}"`).join(","));
   unduh(`bku-${stempelWaktu()}.csv`, "\uFEFF" + kolom.join(",") + "\n" + baris.join("\n"), "text/csv");
 });
