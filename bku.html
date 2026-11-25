@@ -774,8 +774,9 @@ function perbaruiPilihanSpj() {
     t.classList.toggle("terpilih", pilihanSpj.has(Number(t.dataset.id))));
   const dipilih = data.filter(x => pilihanSpj.has(x.id));
   const total = dipilih.reduce((s, x) => s + angka(x.bruto), 0);
+  const totalPajak = dipilih.reduce((s, x) => s + hitung(x).deposit, 0);
   document.getElementById("ringkasPilihan").textContent = dipilih.length
-    ? `Dipilih ${dipilih.length} SPJ · Total bruto ${rupiah(total)}`
+    ? `Dipilih ${dipilih.length} SPJ · Total bruto ${rupiah(total)} · Total pajak ${rupiah(totalPajak)}`
     : "";
 }
 
