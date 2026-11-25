@@ -538,6 +538,7 @@ function isiForm(r) {
 
 function resetForm() {
   form.reset();
+  form.elements.noReg.style.borderColor = "";
   PAJAK_DPP.forEach(p => hitungPajakTampil(p.id));
   editId = null;
   document.getElementById("judulForm").textContent = "Tambah SPJ";
@@ -592,6 +593,26 @@ function batalGup() {
   setGupEditable(false);
   aktifkanAksiGup();
 }
+
+// Cek nomor register begitu selesai diisi atau discan (saat kursor pindah dari kolom ini)
+function cekNoRegSekarang() {
+  const el = form.elements.noReg;
+  const nr = el.value.trim();
+  const sama = nr ? data.find(x => String(x.noReg).trim() === nr && x.id !== editId) : null;
+  el.style.borderColor = sama ? "var(--merah)" : "";
+  tampilPesan(sama ? `Nomor register ${nr} sudah ada (${sama.penagih}). Periksa kembali.` : "");
+}
+form.elements.noReg.addEventListener("change", cekNoRegSekarang);
+
+// Enter (termasuk dari scanner barcode) hanya pindah ke isian berikutnya, tidak menyimpan SPJ
+form.addEventListener("keydown", e => {
+  if (e.key !== "Enter" || e.target.tagName === "TEXTAREA") return;
+  e.preventDefault();
+  const elemen = Array.from(form.querySelectorAll("input, select"))
+    .filter(el => !el.disabled && el.type !== "hidden" && el.type !== "submit");
+  const i = elemen.indexOf(e.target);
+  if (i >= 0 && i + 1 < elemen.length) elemen[i + 1].focus();
+});
 
 document.getElementById("btnBatal").addEventListener("click", batalSpj);
 
@@ -867,7 +888,7 @@ const hariIni = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-window.tambahBaru = () => { spjTerpilih = null; resetForm(); form.elements.tanggal.value = hariIni(); setFormEditable(true); aktifkanAksi(); };
+window.tambahBaru = () => { spjTerpilih = null; resetForm(); form.elements.tanggal.value = hariIni(); setFormEditable(true); form.elements.noReg.focus(); aktifkanAksi(); };
 window.ubahTerpilih = () => { if (spjTerpilih !== null) { ubah(spjTerpilih); setFormEditable(true); } };
 window.riwayatTerpilih = () => { if (spjTerpilih !== null) lihatRiwayat(spjTerpilih); };
 window.hapusTerpilih = () => { if (spjTerpilih !== null) hapus(spjTerpilih); };
