@@ -66,6 +66,10 @@ td.angka,th.angka{text-align:right}
 <p class="sub">Pencatatan SPJ, pajak, dan pembayaran. Data tersimpan di browser perangkat ini.</p>
 
 <div class="banner" id="banner" style="display:none"></div>
+<div class="bar" style="margin-bottom:12px">
+  <button class="sekunder" onclick="pilihFolderCadangan()">Pilih folder cadangan</button>
+  <span id="statusCadangan" style="font-size:13px;color:var(--redup)">Cadangan folder belum aktif.</span>
+</div>
 
 <!-- ============ RINGKASAN ============ -->
 <div class="kartu">
@@ -424,6 +428,7 @@ function muatData() {
 function simpanData() {
   localStorage.setItem(KUNCI, JSON.stringify(data));
   localStorage.setItem(KUNCI_GUP, JSON.stringify(gup));
+  jadwalkanCadangan();
   perbaruiBanner();
 }
 
@@ -1296,9 +1301,103 @@ window.hapusGupTerpilih = () => {
   });
 };
 
+/* ===== Cadangan otomatis ke folder (File System Access API, Chrome/Edge) ===== */
+// Handle folder disimpan di IndexedDB (bukan localStorage), lalu dipakai ulang saat halaman dibuka
+let handleFolder = null;
+let timerCadangan = null;
+const NAMA_FILE_CADANGAN = "bku-backup.json";
+
+function bukaDbFolder() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open("bku-folder-db", 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("h");
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+
+async function simpanHandleFolder(h) {
+  const db = await bukaDbFolder();
+  db.transaction("h", "readwrite").objectStore("h").put(h, "folder");
+}
+
+async function ambilHandleFolder() {
+  const db = await bukaDbFolder();
+  return new Promise(res => {
+    const q = db.transaction("h").objectStore("h").get("folder");
+    q.onsuccess = () => res(q.result || null);
+    q.onerror = () => res(null);
+  });
+}
+
+function tampilStatusCadangan(teks, galat = false) {
+  const el = document.getElementById("statusCadangan");
+  el.textContent = teks;
+  el.style.color = galat ? "var(--merah)" : "var(--redup)";
+}
+
+// Menulis ulang file cadangan dengan seluruh data SPJ dan GUP/TUP
+async function tulisCadangan() {
+  if (!handleFolder) return;
+  try {
+    if ((await handleFolder.queryPermission({ mode: "readwrite" })) !== "granted") {
+      tampilStatusCadangan("Izin folder belum aktif. Klik Pilih folder cadangan untuk mengaktifkannya.", true);
+      return;
+    }
+    const fh = await handleFolder.getFileHandle(NAMA_FILE_CADANGAN, { create: true });
+    const w = await fh.createWritable();
+    await w.write(JSON.stringify({ versi: 2, diekspor: new Date().toISOString(), data, gup }, null, 2));
+    await w.close();
+    const jam = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    tampilStatusCadangan(`Cadangan aktif ke folder "${handleFolder.name}" · terakhir disimpan ${jam}`);
+  } catch (e) {
+    tampilStatusCadangan("Gagal menyimpan cadangan: " + e.message, true);
+  }
+}
+
+// Dipanggil setiap data berubah; ditunda sebentar agar tidak menulis berulang-ulang
+function jadwalkanCadangan() {
+  if (!handleFolder) return;
+  clearTimeout(timerCadangan);
+  timerCadangan = setTimeout(tulisCadangan, 400);
+}
+
+// Dipanggil dari tombol (membutuhkan klik pengguna agar izin bisa diminta)
+window.pilihFolderCadangan = async () => {
+  if (!window.showDirectoryPicker) {
+    tampilStatusCadangan("Browser ini tidak mendukung cadangan folder. Gunakan Chrome atau Edge.", true);
+    return;
+  }
+  try {
+    const h = await showDirectoryPicker({ mode: "readwrite" });
+    handleFolder = h;
+    await simpanHandleFolder(h);
+    await tulisCadangan();
+  } catch (e) {
+    if (e.name !== "AbortError") tampilStatusCadangan("Gagal memilih folder: " + e.message, true);
+  }
+};
+
+// Saat halaman dibuka: pulihkan folder yang pernah dipilih, lalu cek izinnya
+async function aktifkanFolderTersimpan() {
+  try {
+    const h = await ambilHandleFolder();
+    if (!h) return;
+    handleFolder = h;
+    if ((await h.queryPermission({ mode: "readwrite" })) === "granted") {
+      tampilStatusCadangan(`Cadangan aktif ke folder "${h.name}". Perubahan akan disimpan otomatis.`);
+    } else {
+      tampilStatusCadangan(`Klik Pilih folder cadangan untuk mengaktifkan kembali folder "${h.name}".`);
+    }
+  } catch (e) {
+    tampilStatusCadangan("Cadangan folder belum aktif.");
+  }
+}
+
 setFormEditable(false);
 setGupEditable(false);
 perbaruiBanner();
+aktifkanFolderTersimpan();
 </script>
 <div id="modalKonfirmasi" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;align-items:center;justify-content:center">
   <div style="background:var(--kartu);color:var(--teks);border-radius:6px;width:min(380px,90vw);box-shadow:0 10px 30px rgba(0,0,0,.25);overflow:hidden">
