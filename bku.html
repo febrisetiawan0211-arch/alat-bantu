@@ -23,6 +23,11 @@ input[type=checkbox]{width:16px;height:16px}
 button{padding:8px 14px;border-radius:8px;border:1px solid var(--garis);background:var(--kartu);color:var(--teks);cursor:pointer;font-size:13px}
 button.utama{background:var(--aksen);color:#fff;border-color:var(--aksen);font-weight:600}
 button.kecil{padding:3px 8px;font-size:12px}
+button:disabled{opacity:.45;cursor:not-allowed}
+tr.terpilih td{background:#bfdbfe;color:#0f172a}
+button{transition:transform .08s ease,filter .08s ease,background .15s}
+button:not(:disabled):active{transform:scale(.96);filter:brightness(.82)}
+button:not(:disabled):focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}
 button.bahaya{color:var(--merah)}
 .ringkas{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
 .ringkas div{background:var(--aksen-muda);border-radius:10px;padding:10px 12px}
@@ -106,7 +111,7 @@ td.angka,th.angka{text-align:right}
   </div>
   <div class="tabel-wrap" style="margin-top:12px">
     <table>
-      <thead><tr><th>Tanggal</th><th class="angka">Jumlah</th><th>Masuk ke</th><th>Keterangan</th><th>Aksi</th></tr></thead>
+      <thead><tr><th>Tanggal</th><th class="angka">Jumlah</th><th>Masuk ke</th><th>Keterangan</th></tr></thead>
       <tbody id="tbodyGup"></tbody>
     </table>
   </div>
@@ -118,6 +123,21 @@ td.angka,th.angka{text-align:right}
     <span id="infoGup" style="color:var(--redup);font-size:12px"></span>
     <button class="sekunder" onclick="eksporCsvGup()">Unduh CSV GUP/TUP</button>
   </div>
+</div>
+
+<!-- ============ AKSI SPJ (di bawah tabel) ============ -->
+<div id="aksiSpj" class="bar" style="justify-content:flex-end;margin-bottom:18px">
+  <button class="utama" onclick="tambahBaru()">+ Tambah</button>
+  <button class="sekunder" id="btnUbahSpj" onclick="ubahTerpilih()" disabled>Ubah</button>
+  <button class="sekunder" id="btnRiwayatSpj" onclick="riwayatTerpilih()" disabled>Riwayat</button>
+  <button class="sekunder bahaya" id="btnHapusSpj" onclick="hapusTerpilih()" disabled>Hapus</button>
+</div>
+
+<!-- ============ AKSI GUP/TUP (di bawah tabel) ============ -->
+<div id="aksiGup" class="bar" style="justify-content:flex-end;margin-bottom:18px">
+  <button class="utama" onclick="tambahGupBaru()">+ Tambah</button>
+  <button class="sekunder" id="btnUbahGup" onclick="ubahGupTerpilih()" disabled>Ubah</button>
+  <button class="sekunder bahaya" id="btnHapusGup" onclick="hapusGupTerpilih()" disabled>Hapus</button>
 </div>
 
 <!-- ============ PANEL IMPOR ============ -->
@@ -144,7 +164,7 @@ td.angka,th.angka{text-align:right}
       <thead><tr>
         <th>No</th><th>Tanggal</th><th>No. Register</th><th>Penagih</th><th>PPK</th><th>Jenis</th>
         <th class="angka">Bruto</th><th class="angka">Pajak</th><th class="angka">Netto</th>
-        <th title="Bupot dibuat">BP</th><th title="Faktur pajak dilaporkan">FP</th><th title="Sudah di Sintag">SG</th><th title="Pajak dipungut">PG</th><th title="Pajak disetor (SAKTI)">SK</th><th title="Pajak sudah disetor">DS</th><th title="SPJ sudah dibayar">DB</th><th>Status</th><th>Aksi</th>
+        <th title="Bupot dibuat">BP</th><th title="Faktur pajak dilaporkan">FP</th><th title="Sudah di Sintag">SG</th><th title="Pajak dipungut">PG</th><th title="Pajak disetor (SAKTI)">SK</th><th title="Pajak sudah disetor">DS</th><th title="SPJ sudah dibayar">DB</th><th>Status</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -213,13 +233,13 @@ const KUNCI_GUP = "bku-gup-v1";
 function muatGup() { try { return JSON.parse(localStorage.getItem(KUNCI_GUP)) || []; } catch (e) { return []; } }
 let gup = muatGup();
 
-// Saldo UP dan TUP terpisah. SPJ UP dibayar dari saldo UP, SPJ TUP dari saldo TUP (bruto saat tglBayar). LS dan KKP tidak lewat kas ini
+// Saldo UP dan TUP terpisah. SPJ UP mengurangi saldo UP, SPJ TUP mengurangi saldo TUP, sebesar bruto pada tanggal masuk SPJ. LS dan KKP tidak lewat kas ini
 // Sisa kas sebelum SPJ dibayar dihitung urut tanggal; SPJ belum bayar memakai saldo sekarang
 function hitungKas() {
   const ev = [];
   gup.forEach(g => ev.push({ tgl: String(g.tanggal), urut: 0, jumlah: angka(g.jumlah), pool: g.pool || "UP" }));
   data.map(hitung).forEach(r => {
-    if (r.tglBayar && (r.jenis === "UP" || r.jenis === "TUP")) ev.push({ tgl: String(r.tglBayar), urut: 1, jumlah: -angka(r.bruto), id: r.id, noReg: String(r.noReg), pool: r.jenis });
+    if (r.tanggal && (r.jenis === "UP" || r.jenis === "TUP")) ev.push({ tgl: String(r.tanggal), urut: 1, jumlah: -angka(r.bruto), id: r.id, noReg: String(r.noReg), pool: r.jenis });
   });
   ev.sort((a, b) => a.tgl.localeCompare(b.tgl) || a.urut - b.urut || String(a.noReg ?? "").localeCompare(String(b.noReg ?? "")));
   const sisa = {};
@@ -261,8 +281,58 @@ document.getElementById("ukuranGup").addEventListener("change", e => {
   tampilkanSemua();
 });
 
+let gupTerpilih = null;
+
+// Tombol Ubah dan Hapus GUP/TUP hanya aktif jika satu pengajuan dipilih
+function aktifkanAksiGup() {
+  const ada = gupTerpilih !== null && gup.some(x => x.id === gupTerpilih);
+  if (!ada) gupTerpilih = null;
+  ["btnUbahGup", "btnHapusGup"].forEach(id => document.getElementById(id).disabled = !ada);
+}
+
+window.tambahGupBaru = () => {
+  gupTerpilih = null;
+  gupEditId = null;
+  ["gupTanggal", "gupJumlah", "gupKet"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("gupPool").value = "UP";
+  document.getElementById("btnGup").textContent = "Tambah GUP/TUP";
+  document.getElementById("pesanGup").textContent = "";
+  setGupEditable(true);
+  aktifkanAksiGup();
+};
+// Formulir GUP/TUP hanya bisa diedit setelah tombol Ubah atau Tambah ditekan
+function setGupEditable(on) {
+  ["gupTanggal", "gupJumlah", "gupPool", "gupKet", "btnGup"].forEach(id => document.getElementById(id).disabled = !on);
+}
+
+window.ubahGupTerpilih = () => { if (gupTerpilih !== null) { ubahGup(gupTerpilih); setGupEditable(true); } };
+window.hapusGupTerpilih = () => { if (gupTerpilih !== null) hapusGup(gupTerpilih); };
+window.pilihGup = (id, ev) => {
+  if (ev && ev.target.closest("button")) return;
+  const barisKlik = ev.target.closest("tr");
+  if (barisKlik.classList.contains("terpilih")) {
+    // Klik baris yang sudah dipilih: batalkan pilihan dan kosongkan formulir
+    barisKlik.classList.remove("terpilih");
+    gupTerpilih = null;
+    gupEditId = null;
+    ["gupTanggal", "gupJumlah", "gupKet"].forEach(x => document.getElementById(x).value = "");
+    document.getElementById("gupPool").value = "UP";
+    document.getElementById("btnGup").textContent = "Tambah GUP/TUP";
+    document.getElementById("pesanGup").textContent = "";
+    setGupEditable(false);
+    aktifkanAksiGup();
+    return;
+  }
+  document.querySelectorAll("tr.terpilih").forEach(t => t.classList.remove("terpilih"));
+  ev.target.closest("tr").classList.add("terpilih");
+  ubahGup(id);
+  setGupEditable(false);
+};
+
 // Mengisi formulir dengan data pengajuan yang akan diubah
 window.ubahGup = id => {
+  gupTerpilih = id;
+  aktifkanAksiGup();
   const g = gup.find(x => x.id === id);
   if (!g) return;
   gupEditId = id;
@@ -272,7 +342,7 @@ window.ubahGup = id => {
   document.getElementById("gupKet").value = g.keterangan || "";
   document.getElementById("btnGup").textContent = "Simpan perubahan";
   document.getElementById("pesanGup").textContent = `Mengubah pengajuan tanggal ${g.tanggal}`;
-  document.getElementById("gupTanggal").scrollIntoView({ behavior: "smooth", block: "center" });
+
 };
 
 // Unduh seluruh daftar GUP/TUP (bukan hanya halaman yang tampil) dalam format CSV
@@ -322,12 +392,12 @@ window.hapusGup = id => {
 function tampilkanKas() {
   const { saldo } = hitungKas();
   const totalGup = gup.reduce((s, g) => s + angka(g.jumlah), 0);
-  const totalTup = data.filter(r => r.tglBayar && r.jenis === "TUP").reduce((s, r) => s + angka(r.bruto), 0);
-  const totalKeluar = data.filter(r => r.tglBayar && r.jenis === "UP").reduce((s, r) => s + angka(r.bruto), 0);
+  const totalTup = data.filter(r => r.jenis === "TUP").reduce((s, r) => s + angka(r.bruto), 0);
+  const totalKeluar = data.filter(r => r.jenis === "UP").reduce((s, r) => s + angka(r.bruto), 0);
   document.getElementById("ringkasKas").innerHTML = `
     <div><small>Total GUP/TUP masuk</small><b>${rupiah(totalGup)}</b></div>
-    <div><small>Dibayar dari TUP</small><b>${rupiah(totalTup)}</b></div>
-    <div><small>Dibayar dari UP</small><b>${rupiah(totalKeluar)}</b></div>
+    <div><small>SPJ TUP tercatat</small><b>${rupiah(totalTup)}</b></div>
+    <div><small>SPJ UP tercatat</small><b>${rupiah(totalKeluar)}</b></div>
     <div><small>Saldo UP sekarang</small><b>${rupiah(saldo.UP)}</b></div>
     <div><small>Saldo TUP sekarang</small><b>${rupiah(saldo.TUP)}</b></div>`;
   const semuaGup = gup.slice().sort((a, b) => String(b.tanggal).localeCompare(String(a.tanggal)));
@@ -337,8 +407,8 @@ function tampilkanKas() {
   const daftar = semuaGup.slice(dariG, dariG + gupUkuran);
   tampilkanPagerGup(semuaGup.length, jumlahGup);
   document.getElementById("tbodyGup").innerHTML = daftar.map(g =>
-    `<tr><td>${esc(g.tanggal)}</td><td class="angka">${rupiah(g.jumlah)}</td><td>${g.pool || "UP"}</td><td>${esc(g.keterangan)}</td><td><button class="kecil" onclick="ubahGup(${g.id})">Ubah</button> <button class="kecil bahaya" onclick="hapusGup(${g.id})">Hapus</button></td></tr>`
-  ).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--redup)">Belum ada GUP.</td></tr>`;
+    `<tr style="cursor:pointer" onclick="pilihGup(${g.id}, event)"><td>${esc(g.tanggal)}</td><td class="angka">${rupiah(g.jumlah)}</td><td>${g.pool || "UP"}</td><td>${esc(g.keterangan)}</td></tr>`
+  ).join("") || `<tr><td colspan="4" style="text-align:center;color:var(--redup)">Belum ada GUP.</td></tr>`;
 }
 
 function muatData() {
@@ -576,13 +646,13 @@ function tampilkanTabel(baris, mulai = 0) {
   const tbody = document.getElementById("tbody");
 
   if (!baris.length) {
-    tbody.innerHTML = `<tr><td colspan="18" style="text-align:center;color:var(--redup);padding:20px">Belum ada data.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="17" style="text-align:center;color:var(--redup);padding:20px">Belum ada data.</td></tr>`;
     return;
   }
   tbody.innerHTML = baris.map((r, i) => {
     const st = statusRecord(r);
     const centang = CEKLIS.map(([n, kode]) => r[n] ? kode : "··").join(" ");
-    return `<tr>
+    return `<tr style="cursor:pointer" onclick="pilihSpj(${r.id}, event)">
       <td>${mulai + i + 1}</td>
       <td>${esc(r.tanggal)}</td>
       <td>${esc(r.noReg)}</td>
@@ -595,11 +665,6 @@ function tampilkanTabel(baris, mulai = 0) {
       
       ${CEKLIS.map(([n]) => `<td class="centang">${!berlaku(r, n) ? "–" : (r[n] ? "✓" : "")}</td>`).join("")}
       <td><span class="status ${kelasStatus(st)}">${st}</span></td>
-      <td>
-        <button class="kecil" onclick="ubah(${r.id})">Ubah</button>
-        <button class="kecil" onclick="lihatRiwayat(${r.id})">Riwayat</button>
-        <button class="kecil bahaya" onclick="hapus(${r.id})">Hapus</button>
-      </td>
     </tr>`;
   }).join("");
 }
@@ -618,6 +683,8 @@ function tampilkanRingkasan(baris) {
 }
 
 function tampilkanSemua() {
+  aktifkanAksi();
+  aktifkanAksiGup();
   tampilkanKas();
   const semua = dataTerfilter();
   const jumlahHalaman = Math.max(1, Math.ceil(semua.length / ukuranHalaman));
@@ -631,13 +698,54 @@ function tampilkanSemua() {
 ["cari", "filterPPK", "filterJenis", "filterStatus"].forEach(id =>
   document.getElementById(id).addEventListener("input", tampilkanSemua));
 
+// Klik baris SPJ: isiannya tampil di formulir (tombol di baris tidak ikut memicu)
+let spjTerpilih = null;
+
+// Tombol Ubah, Riwayat, dan Hapus hanya aktif jika ada SPJ yang dipilih
+function aktifkanAksi() {
+  const ada = spjTerpilih !== null && data.some(x => x.id === spjTerpilih);
+  if (!ada) spjTerpilih = null;
+  ["btnUbahSpj", "btnRiwayatSpj", "btnHapusSpj"].forEach(id => document.getElementById(id).disabled = !ada);
+}
+
+// Formulir SPJ hanya bisa diedit setelah tombol Ubah atau Tambah ditekan
+function setFormEditable(on) {
+  Array.from(form.elements).forEach(el => el.disabled = !on);
+}
+
+window.tambahBaru = () => { spjTerpilih = null; resetForm(); setFormEditable(true); aktifkanAksi(); };
+window.ubahTerpilih = () => { if (spjTerpilih !== null) { ubah(spjTerpilih); setFormEditable(true); } };
+window.riwayatTerpilih = () => { if (spjTerpilih !== null) lihatRiwayat(spjTerpilih); };
+window.hapusTerpilih = () => { if (spjTerpilih !== null) hapus(spjTerpilih); };
+
+window.pilihSpj = (id, ev) => {
+  if (ev && ev.target.closest("button")) return;
+  const barisKlik = ev.target.closest("tr");
+  if (barisKlik.classList.contains("terpilih")) {
+    // Klik baris yang sudah dipilih: batalkan pilihan dan kosongkan formulir
+    barisKlik.classList.remove("terpilih");
+    spjTerpilih = null;
+    resetForm();
+    setFormEditable(false);
+    aktifkanAksi();
+    return;
+  }
+  document.querySelectorAll("tr.terpilih").forEach(t => t.classList.remove("terpilih"));
+  ev.target.closest("tr").classList.add("terpilih");
+  ubah(id);
+  setFormEditable(false);
+  document.getElementById("judulForm").textContent = "Preview SPJ";
+};
+
 window.ubah = id => {
+  spjTerpilih = id;
+  aktifkanAksi();
   const r = data.find(x => x.id === id);
   if (!r) return;
   isiForm(r);
   editId = id;
   document.getElementById("judulForm").textContent = "Ubah SPJ " + r.noReg;
-  window.scrollTo({ top: 0, behavior: "smooth" });
+
 };
 
 const LABEL_CEKLIS = {bupot: "Bupot dibuat", faktur: "Faktur pajak dilaporkan", sintag: "Sudah di Sintag", pungut: "Pajak dipungut", setorSakti: "Pajak disetor (SAKTI)", tanpaPajak: "Tidak ada pemungutan pajak", registerBilling: "Pajak sudah disetor", registerBayar: "SPJ sudah dibayar"};
@@ -911,10 +1019,14 @@ function perbaruiBanner() {
 // Tabel SPJ ditampilkan lebih dulu, lalu kartu Saldo Kas & GUP/TUP
 const kartuKas = document.getElementById("ringkasKas").closest(".kartu");
 const kartuSpj = document.getElementById("tbody").closest(".kartu");
-kartuSpj.after(kartuKas);
+kartuSpj.after(document.getElementById("aksiSpj"));
+document.getElementById("aksiSpj").after(kartuKas);
+kartuKas.after(document.getElementById("aksiGup"));
 
 isiFilterPPK();
 tampilkanSemua();
+setFormEditable(false);
+setGupEditable(false);
 perbaruiBanner();
 </script>
 <div id="modalKonfirmasi" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;align-items:center;justify-content:center">
