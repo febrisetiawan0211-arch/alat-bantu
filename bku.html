@@ -25,6 +25,7 @@ button.utama{background:var(--aksen);color:#fff;border-color:var(--aksen);font-w
 button.kecil{padding:3px 8px;font-size:12px}
 button:disabled{opacity:.45;cursor:not-allowed}
 tr.terpilih td{background:#bfdbfe;color:#0f172a}
+#tbody{user-select:none}
 button{transition:transform .08s ease,filter .08s ease,background .15s}
 button:not(:disabled):active{transform:scale(.96);filter:brightness(.82)}
 button:not(:disabled):focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}
@@ -128,6 +129,7 @@ td.angka,th.angka{text-align:right}
 
 <!-- ============ AKSI SPJ (di bawah tabel) ============ -->
 <div id="aksiSpj" class="bar" style="justify-content:flex-end;margin-bottom:18px">
+  <span id="ringkasPilihan" style="margin-right:auto;color:var(--redup);font-size:14px"></span>
   <button class="utama" onclick="tambahBaru()">+ Tambah</button>
   <button class="sekunder" id="btnUbahSpj" onclick="ubahTerpilih()" disabled>Ubah</button>
   <button class="sekunder" id="btnRiwayatSpj" onclick="riwayatTerpilih()" disabled>Riwayat</button>
@@ -568,6 +570,9 @@ form.addEventListener("submit", e => {
 
 // Batal: kosongkan formulir SPJ dan kunci kembali
 function batalSpj() {
+  pilihanSpj.clear();
+  jangkarSpj = null;
+  perbaruiPilihanSpj();
   spjTerpilih = null;
   resetForm();
   setFormEditable(false);
@@ -676,7 +681,7 @@ function tampilkanTabel(baris, mulai = 0) {
   tbody.innerHTML = baris.map((r, i) => {
     const st = statusRecord(r);
     const centang = CEKLIS.map(([n, kode]) => r[n] ? kode : "··").join(" ");
-    return `<tr style="cursor:pointer" onclick="pilihSpj(${r.id}, event)">
+    return `<tr data-id="${r.id}" style="cursor:pointer" onclick="pilihSpj(${r.id}, event)">
       <td>${mulai + i + 1}</td>
       <td>${esc(r.tanggal)}</td>
       <td>${esc(r.noReg)}</td>
@@ -717,6 +722,7 @@ function tampilkanSemua() {
   tampilkanTabel(semua.slice(dari, dari + ukuranHalaman), dari);
   tampilkanPager(semua.length, jumlahHalaman);
   tampilkanRingkasan(semua);
+  perbaruiPilihanSpj();
 }
 
 ["cari", "filterPPK", "filterJenis", "filterStatus"].forEach(id =>
@@ -736,6 +742,124 @@ function aktifkanAksi() {
 function setFormEditable(on) {
   Array.from(form.elements).forEach(el => el.disabled = !on);
 }
+
+// Pilihan banyak SPJ: klik biasa (satu), Ctrl+klik (tambah/hapus dari pilihan), Shift+klik (rentang)
+let pilihanSpj = new Set();
+let jangkarSpj = null;
+
+function perbaruiPilihanSpj() {
+  pilihanSpj = new Set([...pilihanSpj].filter(id => data.some(x => x.id === id)));
+  document.querySelectorAll("#tbody tr[data-id]").forEach(t =>
+    t.classList.toggle("terpilih", pilihanSpj.has(Number(t.dataset.id))));
+  const dipilih = data.filter(x => pilihanSpj.has(x.id));
+  const total = dipilih.reduce((s, x) => s + angka(x.bruto), 0);
+  document.getElementById("ringkasPilihan").textContent = dipilih.length
+    ? `Dipilih ${dipilih.length} SPJ · Total bruto ${rupiah(total)}`
+    : "";
+}
+
+window.pilihSpj = (id, ev) => {
+  if (ev && ev.target.closest("button")) return;
+  if (dragSudahGeser) return;
+  const ctrl = ev && (ev.ctrlKey || ev.metaKey);
+  const shift = ev && ev.shiftKey;
+  const urutan = Array.from(document.querySelectorAll("#tbody tr[data-id]")).map(t => Number(t.dataset.id));
+  if (shift && jangkarSpj !== null) {
+    const a = urutan.indexOf(jangkarSpj), b = urutan.indexOf(id);
+    const [lo, hi] = a < b ? [a, b] : [b, a];
+    pilihanSpj = new Set(urutan.slice(lo, hi + 1));
+  } else if (ctrl) {
+    if (pilihanSpj.has(id)) pilihanSpj.delete(id); else pilihanSpj.add(id);
+    jangkarSpj = id;
+  } else if (pilihanSpj.size === 1 && pilihanSpj.has(id)) {
+    pilihanSpj.clear();
+    jangkarSpj = null;
+    resetForm();
+    setFormEditable(false);
+  } else {
+    pilihanSpj = new Set([id]);
+    jangkarSpj = id;
+    ubah(id);
+    setFormEditable(false);
+    document.getElementById("judulForm").textContent = "Preview SPJ";
+  }
+  spjTerpilih = pilihanSpj.size === 1 ? [...pilihanSpj][0] : null;
+  aktifkanAksi();
+  perbaruiPilihanSpj();
+};
+
+// Pilihan SPJ: klik satu-satu untuk menambah atau mengurangi baris; Shift+klik untuk rentang
+window.pilihSpj = (id, ev) => {
+  if (dragSudahGeser) return;
+  if (ev && ev.target.closest("button")) return;
+  const shift = ev && ev.shiftKey;
+  if (shift && jangkarSpj !== null) {
+    const urutan = Array.from(document.querySelectorAll("#tbody tr[data-id]")).map(t => Number(t.dataset.id));
+    const a = urutan.indexOf(jangkarSpj), b = urutan.indexOf(id);
+    const [lo, hi] = a < b ? [a, b] : [b, a];
+    pilihanSpj = new Set(urutan.slice(lo, hi + 1));
+  } else {
+    if (pilihanSpj.has(id)) pilihanSpj.delete(id); else pilihanSpj.add(id);
+    jangkarSpj = id;
+  }
+  spjTerpilih = pilihanSpj.size === 1 ? [...pilihanSpj][0] : null;
+  if (spjTerpilih !== null) {
+    ubah(spjTerpilih);
+    setFormEditable(false);
+    document.getElementById("judulForm").textContent = "Preview SPJ";
+  } else if (pilihanSpj.size === 0) {
+    resetForm();
+    setFormEditable(false);
+  }
+  aktifkanAksi();
+  perbaruiPilihanSpj();
+};
+
+// Klik di luar tabel SPJ dan bar aksi menghapus pilihan
+document.addEventListener("mousedown", e => {
+  if (pilihanSpj.size === 0) return;
+  if (e.target.closest("#tbody, #aksiSpj, #form, #pager, #ukuranHalaman, #modalKonfirmasi")) return;
+  pilihanSpj.clear();
+  jangkarSpj = null;
+  spjTerpilih = null;
+  if (form.elements.noReg.disabled) { resetForm(); setFormEditable(false); }
+  perbaruiPilihanSpj();
+  aktifkanAksi();
+});
+
+// Blok dengan mouse (seperti Excel): tekan di baris, geser ke bawah/atas
+let dragSpj = false;
+let dragSudahGeser = false;
+const tbodySpj = document.getElementById("tbody");
+
+tbodySpj.addEventListener("mousedown", e => {
+  const tr = e.target.closest("tr[data-id]");
+  dragSudahGeser = false;
+  if (!tr || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.target.closest("button")) return;
+  dragSpj = true;
+  dragSudahGeser = false;
+  jangkarSpj = Number(tr.dataset.id);
+});
+
+tbodySpj.addEventListener("mouseover", e => {
+  if (!dragSpj) return;
+  const tr = e.target.closest("tr[data-id]");
+  if (!tr) return;
+  dragSudahGeser = true;
+  const urutan = Array.from(tbodySpj.querySelectorAll("tr[data-id]")).map(t => Number(t.dataset.id));
+  const a = urutan.indexOf(jangkarSpj), b = urutan.indexOf(Number(tr.dataset.id));
+  const [lo, hi] = a < b ? [a, b] : [b, a];
+  pilihanSpj = new Set(urutan.slice(lo, hi + 1));
+  perbaruiPilihanSpj();
+});
+
+document.addEventListener("mouseup", () => {
+  if (dragSpj && dragSudahGeser) {
+    spjTerpilih = pilihanSpj.size === 1 ? [...pilihanSpj][0] : null;
+    aktifkanAksi();
+  }
+  dragSpj = false;
+});
 
 // Tanggal hari ini (zona waktu lokal) dalam format yang dipakai input tanggal
 const hariIni = () => {
@@ -1055,6 +1179,32 @@ kartuKas.after(document.getElementById("aksiGup"));
 
 isiFilterPPK();
 tampilkanSemua();
+// Definisi pilihan SPJ yang berlaku (dipasang terakhir): klik satu-satu menambah atau mengurangi, Shift+klik untuk rentang
+window.pilihSpj = (id, ev) => {
+  if (dragSudahGeser) return;
+  if (ev && ev.target.closest("button")) return;
+  if (ev && ev.shiftKey && jangkarSpj !== null) {
+    const urutan = Array.from(document.querySelectorAll("#tbody tr[data-id]")).map(t => Number(t.dataset.id));
+    const a = urutan.indexOf(jangkarSpj), b = urutan.indexOf(id);
+    const [lo, hi] = a < b ? [a, b] : [b, a];
+    pilihanSpj = new Set(urutan.slice(lo, hi + 1));
+  } else {
+    if (pilihanSpj.has(id)) pilihanSpj.delete(id); else pilihanSpj.add(id);
+    jangkarSpj = id;
+  }
+  spjTerpilih = pilihanSpj.size === 1 ? [...pilihanSpj][0] : null;
+  if (spjTerpilih !== null) {
+    ubah(spjTerpilih);
+    setFormEditable(false);
+    document.getElementById("judulForm").textContent = "Preview SPJ";
+  } else if (pilihanSpj.size === 0) {
+    resetForm();
+    setFormEditable(false);
+  }
+  aktifkanAksi();
+  perbaruiPilihanSpj();
+};
+
 setFormEditable(false);
 setGupEditable(false);
 perbaruiBanner();
