@@ -106,7 +106,8 @@ td.angka,th.angka{text-align:right}
     <div class="kolom">
       <div class="baris"><span>Masuk ke</span><select id="gupPool"><option value="UP">Saldo UP (GUP)</option><option value="TUP">Saldo TUP</option></select></div>
       <div class="baris"><span>Keterangan</span><input type="text" id="gupKet" placeholder="No. SPM/SP2D, dll"></div>
-      <div class="baris"><span></span><div class="bar"><button class="utama" onclick="tambahGup()" id="btnGup">Tambah GUP/TUP</button><span id="pesanGup" style="color:var(--redup)"></span></div></div>
+      <div class="baris"><span></span><div class="bar"><button class="utama" onclick="tambahGup()" id="btnGup">Tambah GUP/TUP</button>
+      <button class="sekunder" id="btnBatalGup" onclick="batalGup()">Batal</button><span id="pesanGup" style="color:var(--redup)"></span></div></div>
     </div>
   </div>
   <div class="tabel-wrap" style="margin-top:12px">
@@ -294,6 +295,7 @@ window.tambahGupBaru = () => {
   gupTerpilih = null;
   gupEditId = null;
   ["gupTanggal", "gupJumlah", "gupKet"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("gupTanggal").value = hariIni();
   document.getElementById("gupPool").value = "UP";
   document.getElementById("btnGup").textContent = "Tambah GUP/TUP";
   document.getElementById("pesanGup").textContent = "";
@@ -302,7 +304,7 @@ window.tambahGupBaru = () => {
 };
 // Formulir GUP/TUP hanya bisa diedit setelah tombol Ubah atau Tambah ditekan
 function setGupEditable(on) {
-  ["gupTanggal", "gupJumlah", "gupPool", "gupKet", "btnGup"].forEach(id => document.getElementById(id).disabled = !on);
+  ["gupTanggal", "gupJumlah", "gupPool", "gupKet", "btnGup", "btnBatalGup"].forEach(id => document.getElementById(id).disabled = !on);
 }
 
 window.ubahGupTerpilih = () => { if (gupTerpilih !== null) { ubahGup(gupTerpilih); setGupEditable(true); } };
@@ -461,7 +463,7 @@ const fieldWrap = document.getElementById("fieldWrap");
 fieldWrap.innerHTML = FIELD.map(([nama, label, tipe, opsi]) => {
   let input;
   if (tipe === "select") {
-    input = `<select name="${nama}">` + opsi.map(o => `<option>${o}</option>`).join("") + `</select>`;
+    input = `<select name="${nama}">` + (nama === "ppk" ? "<option value=\"\"></option>" : "") + opsi.map(o => `<option>${o}</option>`).join("") + `</select>`;
   } else {
     const step = tipe === "number" ? ' step="1" min="0"' : "";
     input = `<input type="${tipe}" name="${nama}"${step}>`;
@@ -564,7 +566,29 @@ form.addEventListener("submit", e => {
   tampilPesan("Tersimpan.");
 });
 
-document.getElementById("btnBatal").addEventListener("click", resetForm);
+// Batal: kosongkan formulir SPJ dan kunci kembali
+function batalSpj() {
+  spjTerpilih = null;
+  resetForm();
+  setFormEditable(false);
+  document.querySelectorAll("#tbody tr.terpilih").forEach(t => t.classList.remove("terpilih"));
+  aktifkanAksi();
+}
+
+// Batal: kosongkan formulir GUP/TUP dan kunci kembali
+function batalGup() {
+  gupTerpilih = null;
+  gupEditId = null;
+  ["gupTanggal", "gupJumlah", "gupKet"].forEach(x => document.getElementById(x).value = "");
+  document.getElementById("gupPool").value = "UP";
+  document.getElementById("btnGup").textContent = "Tambah GUP/TUP";
+  document.getElementById("pesanGup").textContent = "";
+  document.querySelectorAll("#tbodyGup tr.terpilih").forEach(t => t.classList.remove("terpilih"));
+  setGupEditable(false);
+  aktifkanAksiGup();
+}
+
+document.getElementById("btnBatal").addEventListener("click", batalSpj);
 
 function tampilPesan(t) { document.getElementById("pesan").textContent = t; }
 
@@ -713,7 +737,13 @@ function setFormEditable(on) {
   Array.from(form.elements).forEach(el => el.disabled = !on);
 }
 
-window.tambahBaru = () => { spjTerpilih = null; resetForm(); setFormEditable(true); aktifkanAksi(); };
+// Tanggal hari ini (zona waktu lokal) dalam format yang dipakai input tanggal
+const hariIni = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+window.tambahBaru = () => { spjTerpilih = null; resetForm(); form.elements.tanggal.value = hariIni(); setFormEditable(true); aktifkanAksi(); };
 window.ubahTerpilih = () => { if (spjTerpilih !== null) { ubah(spjTerpilih); setFormEditable(true); } };
 window.riwayatTerpilih = () => { if (spjTerpilih !== null) lihatRiwayat(spjTerpilih); };
 window.hapusTerpilih = () => { if (spjTerpilih !== null) hapus(spjTerpilih); };
