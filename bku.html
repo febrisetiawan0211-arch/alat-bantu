@@ -1179,6 +1179,23 @@ window.batalImpor = () => {
   p.innerHTML = "";
 };
 
+// Membaca satu baris CSV yang sudah terbungkus dalam satu sel (misalnya hasil salin-tempel atau dibuka ulang di Excel)
+function parseCsvBaris(teks) {
+  const out = [];
+  let cur = "", q = false;
+  for (let i = 0; i < teks.length; i++) {
+    const c = teks[i];
+    if (q) {
+      if (c === '"') { if (teks[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+      else cur += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") { out.push(cur); cur = ""; }
+    else cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+
 document.getElementById("fileExcel").addEventListener("change", async e => {
   const file = e.target.files[0];
   e.target.value = "";
@@ -1186,7 +1203,8 @@ document.getElementById("fileExcel").addEventListener("change", async e => {
   if (typeof XLSX === "undefined") return tampilImpor("Pustaka Excel belum termuat. Periksa koneksi internet, lalu muat ulang halaman.", true);
   try {
     const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "", raw: true });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "", raw: true })
+      .flatMap(r => (r.length === 1 && typeof r[0] === "string" && r[0].includes(",")) ? [parseCsvBaris(r[0])] : [r]);
     const iHeader = rows.findIndex(r => r.some(c => norm(c) === "noregister" || norm(c) === "noreg"));
     if (iHeader < 0) throw new Error("kolom No. Register tidak ditemukan");
     const hdr = rows[iHeader], sub = rows[iHeader + 1] || [];
@@ -1445,8 +1463,11 @@ document.querySelectorAll("#form input[type=checkbox]").forEach(cb => {
 });
 
 // Pastikan id selalu berupa angka (data lama atau hasil impor bisa tersimpan sebagai teks)
-data = data.map(x => ({ ...x, id: Number(x.id) }));
-gup = gup.map(x => ({ ...x, id: Number(x.id) }));
+// Pastikan id selalu angka dan unik (dua SPJ dengan id sama akan ikut terpilih bersamaan)
+let idSudahDipakai = new Set();
+data = data.map(x => { let id = Number(x.id); while (idSudahDipakai.has(id)) id = Date.now() + Math.random(); idSudahDipakai.add(id); return { ...x, id }; });
+idSudahDipakai = new Set();
+gup = gup.map(x => { let id = Number(x.id); while (idSudahDipakai.has(id)) id = Date.now() + Math.random(); idSudahDipakai.add(id); return { ...x, id }; });
 
 aktifkanFolderTersimpan();
 </script>
