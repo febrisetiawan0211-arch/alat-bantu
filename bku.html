@@ -106,7 +106,7 @@ td.angka,th.angka{text-align:right}
   <div class="formulir" style="margin-top:12px">
     <div class="kolom">
       <div class="baris"><span>Tanggal GUP</span><input type="date" id="gupTanggal"></div>
-      <div class="baris"><span>Jumlah (Rp)</span><input type="number" id="gupJumlah" min="0"></div>
+      <div class="baris"><span>Jumlah (Rp)</span><input type="text" inputmode="numeric" id="gupJumlah"></div>
     </div>
     <div class="kolom">
       <div class="baris"><span>Masuk ke</span><select id="gupPool"><option value="UP">Saldo UP (GUP)</option><option value="TUP">Saldo TUP</option></select></div>
@@ -259,7 +259,7 @@ function hitungKas() {
 
 window.tambahGup = () => {
   const tgl = document.getElementById("gupTanggal").value;
-  const jml = angka(document.getElementById("gupJumlah").value);
+  const jml = angka(tanpaTitik(document.getElementById("gupJumlah").value));
   const ket = document.getElementById("gupKet").value.trim();
   const pesan = document.getElementById("pesanGup");
   if (!tgl || jml <= 0) { pesan.textContent = "Isi tanggal dan jumlah GUP."; return; }
@@ -348,7 +348,7 @@ window.ubahGup = id => {
   if (!g) return;
   gupEditId = id;
   document.getElementById("gupTanggal").value = g.tanggal;
-  document.getElementById("gupJumlah").value = g.jumlah;
+  document.getElementById("gupJumlah").value = formatTitik(g.jumlah);
   document.getElementById("gupPool").value = g.pool || "UP";
   document.getElementById("gupKet").value = g.keterangan || "";
   document.getElementById("btnGup").textContent = "Simpan perubahan";
@@ -433,6 +433,9 @@ function simpanData() {
 }
 
 const angka = v => Number(v) || 0;
+// Tampilan nominal dengan titik ribuan (contoh 11.988.000); angka asli tetap disimpan tanpa titik
+const formatTitik = v => { const d = String(v ?? "").replace(/\D/g, ""); return d ? Number(d).toLocaleString("id-ID") : ""; };
+const tanpaTitik = v => String(v ?? "").replace(/\./g, "");
 const rupiah = n => Math.round(n).toLocaleString("id-ID");
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
@@ -475,8 +478,7 @@ fieldWrap.innerHTML = FIELD.map(([nama, label, tipe, opsi]) => {
   if (tipe === "select") {
     input = `<select name="${nama}">` + (nama === "ppk" ? "<option value=\"\"></option>" : "") + opsi.map(o => `<option>${o}</option>`).join("") + `</select>`;
   } else {
-    const step = tipe === "number" ? ' step="1" min="0"' : "";
-    input = `<input type="${tipe}" name="${nama}"${step}>`;
+    input = tipe === "number" ? `<input type="text" inputmode="numeric" name="${nama}">` : `<input type="${tipe}" name="${nama}">`;
   }
   return `<div class="baris"><span>${label}</span>${input}</div>`;
 }).join("");
@@ -485,7 +487,7 @@ fieldWrap.innerHTML = FIELD.map(([nama, label, tipe, opsi]) => {
 fieldWrap.insertAdjacentHTML("beforeend", PAJAK_DPP.map(p => `
   <div style="grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;border:1px solid var(--garis);border-radius:8px;padding:8px">
     <label class="cek"><input type="checkbox" name="ada${p.id}"> ${p.label} ada</label>
-    <label>DPP (Rp)<input type="number" name="dpp${p.id}" min="0"></label>
+    <label>DPP (Rp)<input type="text" inputmode="numeric" name="dpp${p.id}"></label>
     <label>Tarif (%)<input type="number" name="tarif${p.id}" step="0.1" min="0" value="${p.tarif}"></label>
     <label>${p.label} (Rp)<input type="text" id="tampil${p.id}" readonly></label>
   </div>`).join(""));
@@ -508,21 +510,21 @@ fieldWrap.append(kiri, kanan);
 
 function hitungPajakTampil(id) {
   const ada = form.elements["ada" + id].checked;
-  const dpp = angka(form.elements["dpp" + id].value);
+  const dpp = angka(tanpaTitik(form.elements["dpp" + id].value));
   const tarif = angka(form.elements["tarif" + id].value);
-  document.getElementById("tampil" + id).value = ada ? Math.round(dpp * tarif / 100) : 0;
+  document.getElementById("tampil" + id).value = formatTitik(ada ? Math.round(dpp * tarif / 100) : 0);
 }
 
 function bacaForm() {
   const fd = new FormData(form);
   const r = {};
-  FIELD.forEach(([nama]) => r[nama] = fd.get(nama) || "");
+  FIELD.forEach(([nama, , tipe]) => r[nama] = tipe === "number" ? tanpaTitik(fd.get(nama)) : (fd.get(nama) || ""));
   CEKLIS.forEach(([nama]) => r[nama] = form.elements[nama].checked);
   r.tanpaPajak = form.elements.tanpaPajak.checked;
   PAJAK_DPP.forEach(p => {
     const ada = form.elements["ada" + p.id].checked;
     r["ada" + p.id] = ada;
-    r["dpp" + p.id] = ada ? angka(form.elements["dpp" + p.id].value) : 0;
+    r["dpp" + p.id] = ada ? angka(tanpaTitik(form.elements["dpp" + p.id].value)) : 0;
     r["tarif" + p.id] = angka(form.elements["tarif" + p.id].value);
     r[p.pajak] = ada ? Math.round(r["dpp" + p.id] * r["tarif" + p.id] / 100) : 0;
   });
@@ -530,7 +532,7 @@ function bacaForm() {
 }
 
 function isiForm(r) {
-  FIELD.forEach(([nama]) => form.elements[nama].value = r[nama] ?? "");
+  FIELD.forEach(([nama, , tipe]) => form.elements[nama].value = tipe === "number" ? formatTitik(r[nama]) : (r[nama] ?? ""));
   CEKLIS.forEach(([nama]) => form.elements[nama].checked = !!r[nama]);
   form.elements.tanpaPajak.checked = !!r.tanpaPajak;
   PAJAK_DPP.forEach(p => {
@@ -539,7 +541,7 @@ function isiForm(r) {
     const ada = r["ada" + p.id] ?? pajakLama > 0;
     form.elements["ada" + p.id].checked = !!ada;
     form.elements["tarif" + p.id].value = tarif;
-    form.elements["dpp" + p.id].value = r["dpp" + p.id] ?? (ada && pajakLama ? Math.round(pajakLama / (tarif / 100)) : "");
+    form.elements["dpp" + p.id].value = formatTitik(r["dpp" + p.id] ?? (ada && pajakLama ? Math.round(pajakLama / (tarif / 100)) : ""));
     hitungPajakTampil(p.id);
   });
 }
@@ -621,6 +623,12 @@ form.addEventListener("keydown", e => {
   const i = elemen.indexOf(e.target);
   if (i >= 0 && i + 1 < elemen.length) elemen[i + 1].focus();
 });
+
+// Titik ribuan otomatis saat mengetik nominal
+document.getElementById("form").addEventListener("input", e => {
+  if (["bruto", "pph21", "dpp22", "dpp23", "dppPpn"].includes(e.target.name)) e.target.value = formatTitik(e.target.value);
+});
+document.getElementById("gupJumlah").addEventListener("input", e => { e.target.value = formatTitik(e.target.value); });
 
 document.getElementById("btnBatal").addEventListener("click", batalSpj);
 
