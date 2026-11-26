@@ -192,8 +192,8 @@ td.angka,th.angka{text-align:right}
     <span id="infoHalaman" style="color:var(--redup);font-size:12px"></span>
   </div>
   <div class="bar">
-    <button onclick="document.getElementById('fileExcel').click()">Impor Excel (.xlsx)</button>
-    <input type="file" id="fileExcel" accept=".xlsx,.xls" hidden>
+    <button onclick="document.getElementById('fileExcel').click()">Impor Excel / CSV</button>
+    <input type="file" id="fileExcel" accept=".xlsx,.xls,.csv" hidden>
     <button id="btnCSV">Ekspor CSV</button>
     <button class="utama" id="btnExport">Ekspor Data (JSON)</button>
     <label style="flex-direction:row;align-items:center"><button type="button" onclick="document.getElementById('fileImpor').click()">Impor Data (JSON)</button>
@@ -1066,6 +1066,8 @@ const bool = v => v === true || String(v).trim().toUpperCase() === "TRUE";
 function kunciKolom(h) {
   const n = norm(h);
   const tetap = {noregister: "noReg", penagih: "penagih", jenistagihan: "jenis", ppk: "ppk", nospby: "noSpby", nilaibruto: "bruto", pph21: "pph21", nokuitansi: "noKuitansi", keterangan: "keterangan", bupot: "bupot", fakturpajak: "faktur", sintag: "sintag", pungutpajaksakti: "pungut", registerbilling: "registerBilling", registerbayar: "registerBayar", tanggal: "tanggal", tanggalbayar: "tglBayar", setorpajak: "tglSetor", setorpajaksakti: "setorSakti"};
+  const internal = {noreg: "noReg", tglsetor: "tglSetor", tglbayar: "tglBayar", dpp22: "dpp22", dpp23: "dpp23", setorsakti: "setorSakti", registerbilling: "registerBilling", registerbayar: "registerBayar"};
+  if (internal[n]) return internal[n];
   if (tetap[n]) return tetap[n];
   if (n === "ppn") return "ppn";
   if (/^dpp.*22$/.test(n)) return "dpp22";   // "DPP PPh 22" -> dpppph22
@@ -1185,11 +1187,11 @@ document.getElementById("fileExcel").addEventListener("change", async e => {
   try {
     const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "", raw: true });
-    const iHeader = rows.findIndex(r => r.some(c => norm(c) === "noregister"));
+    const iHeader = rows.findIndex(r => r.some(c => norm(c) === "noregister" || norm(c) === "noreg"));
     if (iHeader < 0) throw new Error("kolom No. Register tidak ditemukan");
     const hdr = rows[iHeader], sub = rows[iHeader + 1] || [];
     // Jika ada baris kedua sebagai sub-judul (PPh 21, PPh 22, ...), pakai nama dari baris itu
-    const pakaiSub = sub.some(c => /pph|ppn/i.test(String(c)));
+    const pakaiSub = sub.some(c => /^\s*(pph ?2[123]|ppn)\s*$/i.test(String(c)));
     const kolom = hdr.map((h, i) => kunciKolom(pakaiSub && norm(sub[i]) ? sub[i] : h));
     const mulai = iHeader + (pakaiSub ? 2 : 1);
     const sudahAda = new Set(data.map(x => String(x.noReg)));
@@ -1214,7 +1216,7 @@ document.getElementById("fileExcel").addEventListener("change", async e => {
 });
 
 document.getElementById("btnCSV").addEventListener("click", () => {
-  const kolom = ["tanggal","noReg","penagih","npwp","jenis","ppk","noSpby","uraian","bruto","pph21","pph22","pph23","ppn","deposit","netto","dpp22","dpp23","noKuitansi","tglSetor","tglBayar","keterangan"];
+  const kolom = ["tanggal","noReg","penagih","npwp","jenis","ppk","noSpby","uraian","bruto","pph21","pph22","pph23","ppn","deposit","netto","dpp22","dpp23","noKuitansi","tglSetor","tglBayar","keterangan","bupot","faktur","sintag","pungut","setorSakti","registerBilling","registerBayar"];
   const baris = data.map(hitung).map(r => kolom.map(k => `"${String(r[k] ?? "").replace(/"/g, '""')}"`).join(","));
   unduh(`bku-${stempelWaktu()}.csv`, "\uFEFF" + kolom.join(",") + "\n" + baris.join("\n"), "text/csv");
 });
