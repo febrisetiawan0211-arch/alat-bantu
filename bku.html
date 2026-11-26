@@ -25,7 +25,7 @@ button.utama{background:var(--aksen);color:#fff;border-color:var(--aksen);font-w
 button.kecil{padding:3px 8px;font-size:12px}
 button:disabled{opacity:.45;cursor:not-allowed}
 tr.terpilih td{background:#bfdbfe;color:#0f172a}
-#tbody{user-select:none}
+
 button{transition:transform .08s ease,filter .08s ease,background .15s}
 button:not(:disabled):active{transform:scale(.96);filter:brightness(.82)}
 button:not(:disabled):focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}
@@ -867,7 +867,7 @@ const tbodySpj = document.getElementById("tbody");
 tbodySpj.addEventListener("mousedown", e => {
   const tr = e.target.closest("tr[data-id]");
   dragSudahGeser = false;
-  if (!tr || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.target.closest("button")) return;
+  if (!tr || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.target.closest("button") || e.target.closest("td") !== tr.cells[0]) return;
   dragSpj = true;
   dragSudahGeser = false;
   jangkarSpj = Number(tr.dataset.id);
@@ -1214,6 +1214,7 @@ tampilkanSemua();
 // Definisi pilihan SPJ yang berlaku (dipasang terakhir): klik satu-satu menambah atau mengurangi, Shift+klik untuk rentang
 window.pilihSpj = (id, ev) => {
   if (dragSudahGeser) return;
+  if (window.getSelection && window.getSelection().toString()) return; // sedang memblok teks untuk copy
   if (ev && ev.target.closest("button")) return;
   if (ev && ev.shiftKey && jangkarSpj !== null) {
     const urutan = Array.from(document.querySelectorAll("#tbody tr[data-id]")).map(t => Number(t.dataset.id));
