@@ -563,6 +563,9 @@ form.addEventListener("submit", e => {
   e.preventDefault();
   const r = bacaForm();
   if (r.tanpaPajak) nolkanPajak(r);
+  // Ceklis otomatis mengikuti tanggal: tanggal setor -> DS, tanggal bayar -> DB (ceklis manual tetap dibiarkan)
+  if (r.tglSetor) r.registerBilling = true;
+  if (r.tglBayar) r.registerBayar = true;
   if (!r.noReg.trim()) return tampilPesan("Nomor register wajib diisi.");
   const duplikat = data.some(x => x.noReg === r.noReg && x.id !== editId);
   if (duplikat) return tampilPesan("Nomor register " + r.noReg + " sudah ada. Periksa kembali.");
