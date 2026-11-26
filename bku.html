@@ -50,6 +50,9 @@ td.angka,th.angka{text-align:right}
 .formulir{display:grid;grid-template-columns:1fr 1fr;gap:8px 32px}
 .kolom{display:flex;flex-direction:column;gap:8px;min-width:0}
 .formulir .baris input,.formulir .baris select{width:100%}
+.formulir .baris .bar{flex-wrap:nowrap;gap:6px}
+.formulir .baris .bar input[type=date]{width:auto;flex:1;min-width:0;padding:8px 10px}
+.formulir .baris .bar span{font-size:13px;color:var(--redup);white-space:nowrap}
 .formulir .baris{display:grid;grid-template-columns:170px 1fr;align-items:center;gap:10px}
 .formulir .baris>span{font-size:13px;font-weight:600;color:var(--teks)}
 .formulir input[readonly]{background:var(--garis);color:var(--teks);text-align:right;cursor:default}
@@ -164,6 +167,7 @@ td.angka,th.angka{text-align:right}
     <div class="kolom">
       <div class="baris"><span>Cari</span><input type="text" id="cari" placeholder="No. register, penagih, atau uraian"></div>
       <div class="baris"><span>PPK</span><select id="filterPPK"><option value="">Semua PPK</option></select></div>
+      <div class="baris"><span>Tanggal masuk</span><div class="bar"><input type="date" id="filterDari"><span>s.d.</span><input type="date" id="filterSampai"></div></div>
     </div>
     <div class="kolom">
       <div class="baris"><span>Jenis tagihan</span><select id="filterJenis"><option value="">Semua jenis</option><option>UP</option><option>TUP</option><option>LS</option><option>KKP</option></select></div>
@@ -669,11 +673,15 @@ function dataTerfilter() {
   const ppk = document.getElementById("filterPPK").value;
   const jenis = document.getElementById("filterJenis").value;
   const status = document.getElementById("filterStatus").value;
+  const dari = document.getElementById("filterDari").value;
+  const sampai = document.getElementById("filterSampai").value;
   return data
     .map(hitung)
     .filter(r => !ppk || r.ppk === ppk)
     .filter(r => !jenis || r.jenis === jenis)
     .filter(r => !status || statusRecord(r) === status)
+    .filter(r => !dari || String(r.tanggal) >= dari)
+    .filter(r => !sampai || String(r.tanggal) <= sampai)
     .filter(r => !cari || [r.penagih, r.noReg, r.uraian, r.noSpby].join(" ").toLowerCase().includes(cari))
     .sort((a, b) => String(b.tanggal).localeCompare(String(a.tanggal)));
 }
@@ -786,7 +794,7 @@ function tampilkanSemua() {
   perbaruiPilihanGup();
 }
 
-["cari", "filterPPK", "filterJenis", "filterStatus"].forEach(id =>
+["cari", "filterPPK", "filterJenis", "filterStatus", "filterDari", "filterSampai"].forEach(id =>
   document.getElementById(id).addEventListener("input", tampilkanSemua));
 
 // Klik baris SPJ: isiannya tampil di formulir (tombol di baris tidak ikut memicu)
@@ -1433,6 +1441,10 @@ perbaruiBanner();
 document.querySelectorAll("#form input[type=checkbox]").forEach(cb => {
   if (CEKLIS.some(([n]) => n === cb.name)) cb.closest("label").remove();
 });
+
+// Pastikan id selalu berupa angka (data lama atau hasil impor bisa tersimpan sebagai teks)
+data = data.map(x => ({ ...x, id: Number(x.id) }));
+gup = gup.map(x => ({ ...x, id: Number(x.id) }));
 
 aktifkanFolderTersimpan();
 </script>
