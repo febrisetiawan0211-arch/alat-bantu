@@ -721,6 +721,7 @@ function berlaku(r, n) {
   if (n === "sintag" || n === "registerBayar") return true;
   if (n === "faktur") return !r.tanpaPajak && angka(r.ppn) > 0;
   if (n === "bupot") return adaPphRecord(r);
+  if (n === "registerBilling" && r.tglSetor) return true;
   return adaPajakRecord(r);
 }
 
@@ -751,7 +752,7 @@ function tampilkanTabel(baris, mulai = 0) {
       <td class="angka">${rupiah(r.deposit)}</td>
       <td class="angka">${rupiah(r.netto)}</td>
       
-      ${CEKLIS.map(([n]) => `<td class="centang">${!berlaku(r, n) ? "–" : `<input type="checkbox" data-id="${r.id}" data-k="${n}" ${r[n] ? "checked" : ""}>`}</td>`).join("")}
+      ${CEKLIS.map(([n]) => `<td class="centang">${!berlaku(r, n) ? "–" : `<input type="checkbox" data-id="${r.id}" data-k="${n}" ${(r[n] || (n === "registerBilling" && r.tglSetor) || (n === "registerBayar" && r.tglBayar)) ? "checked" : ""}>`}</td>`).join("")}
       <td><span class="status ${kelasStatus(st)}">${st}</span></td>
     </tr>`;
   }).join("");
