@@ -29,6 +29,9 @@ tr.terpilih td{background:#bfdbfe;color:#0f172a}
 button{transition:transform .08s ease,filter .08s ease,background .15s}
 button:not(:disabled):active{transform:scale(.96);filter:brightness(.82)}
 button:not(:disabled):focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}
+td.centang input{appearance:none;-webkit-appearance:none;display:inline-block;box-sizing:border-box;width:16px;height:16px;min-width:16px;min-height:16px;max-width:16px;max-height:16px;aspect-ratio:1/1;flex:none;padding:0;border:1.5px solid #94a3b8;border-radius:50%;background-color:#fff;cursor:pointer;vertical-align:middle;margin:0;transition:background-color .15s,border-color .15s}
+td.centang input:checked{background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.2 8.4l2.6 2.6 5-5.2' fill='none' stroke='%230f766e' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat;border:1.5px solid #0f766e}
+td.centang input:hover{border-color:#0f766e}
 button.bahaya{color:var(--merah)}
 .ringkas{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
 .ringkas div{background:var(--aksen-muda);border-radius:10px;padding:10px 12px}
@@ -495,7 +498,7 @@ fieldWrap.addEventListener("input", () => PAJAK_DPP.forEach(p => hitungPajakTamp
 fieldWrap.addEventListener("change", () => PAJAK_DPP.forEach(p => hitungPajakTampil(p.id)));
 
 // Urutan tampilan mengikuti header Excel: kolom kiri turun ke bawah, lalu kolom kanan turun ke bawah
-const URUTAN = ["tanggal","noReg","penagih","jenis","ppk","noSpby","bruto","pph21","22","23","Ppn","keterangan","noKuitansi","sintag","pungut","setorSakti","registerBilling","tglSetor","registerBayar","tglBayar","uraian","npwp","bupot","faktur","tanpaPajak"];
+const URUTAN = ["tanggal","noReg","penagih","jenis","ppk","noSpby","bruto","pph21","22","23","Ppn","keterangan","noKuitansi","tglSetor","registerBayar","tglBayar","uraian","npwp","tanpaPajak"];
 function elemenUrutan(k) {
   if (["22","23","Ppn"].includes(k)) return document.getElementById("tampil" + k).closest("div");
   const el = form.elements[k];
@@ -519,7 +522,8 @@ function bacaForm() {
   const fd = new FormData(form);
   const r = {};
   FIELD.forEach(([nama, , tipe]) => r[nama] = tipe === "number" ? tanpaTitik(fd.get(nama)) : (fd.get(nama) || ""));
-  CEKLIS.forEach(([nama]) => r[nama] = form.elements[nama].checked);
+  // Ceklis tidak lagi diisi di formulir; nilainya mengikuti data SPJ yang sedang diubah
+  CEKLIS.forEach(([nama]) => r[nama] = editId !== null ? !!(data.find(x => x.id === editId) || {})[nama] : false);
   r.tanpaPajak = form.elements.tanpaPajak.checked;
   PAJAK_DPP.forEach(p => {
     const ada = form.elements["ada" + p.id].checked;
@@ -533,7 +537,7 @@ function bacaForm() {
 
 function isiForm(r) {
   FIELD.forEach(([nama, , tipe]) => form.elements[nama].value = tipe === "number" ? formatTitik(r[nama]) : (r[nama] ?? ""));
-  CEKLIS.forEach(([nama]) => form.elements[nama].checked = !!r[nama]);
+  CEKLIS.forEach(([nama]) => { if (form.elements[nama]) form.elements[nama].checked = !!r[nama]; });
   form.elements.tanpaPajak.checked = !!r.tanpaPajak;
   PAJAK_DPP.forEach(p => {
     const pajakLama = angka(r[p.pajak]);
@@ -629,6 +633,21 @@ document.getElementById("form").addEventListener("input", e => {
   if (["bruto", "pph21", "dpp22", "dpp23", "dppPpn"].includes(e.target.name)) e.target.value = formatTitik(e.target.value);
 });
 document.getElementById("gupJumlah").addEventListener("input", e => { e.target.value = formatTitik(e.target.value); });
+
+// Ceklis di tabel bisa langsung diklik untuk mengubah status SPJ
+document.getElementById("tbody").addEventListener("change", e => {
+  const el = e.target;
+  if (el.type !== "checkbox" || !el.dataset.k) return;
+  const r = data.find(x => x.id === Number(el.dataset.id));
+  if (!r) return;
+  const k = el.dataset.k;
+  r[k] = el.checked;
+  r.riwayat = [...(r.riwayat || []), { waktu: new Date().toLocaleString("id-ID"), catatan: `${LABEL_CEKLIS[k]}: ${el.checked ? "dicentang" : "centang dihapus"} (dari tabel)` }];
+  // Jika SPJ ini sedang tampil di formulir, ikut perbarui ceklisnya
+  if (spjTerpilih === r.id && form.elements[k]) form.elements[k].checked = el.checked;
+  simpanData();
+  tampilkanSemua();
+});
 
 document.getElementById("btnBatal").addEventListener("click", batalSpj);
 
@@ -729,7 +748,7 @@ function tampilkanTabel(baris, mulai = 0) {
       <td class="angka">${rupiah(r.deposit)}</td>
       <td class="angka">${rupiah(r.netto)}</td>
       
-      ${CEKLIS.map(([n]) => `<td class="centang">${!berlaku(r, n) ? "–" : (r[n] ? "✓" : "")}</td>`).join("")}
+      ${CEKLIS.map(([n]) => `<td class="centang">${!berlaku(r, n) ? "–" : `<input type="checkbox" data-id="${r.id}" data-k="${n}" ${r[n] ? "checked" : ""}>`}</td>`).join("")}
       <td><span class="status ${kelasStatus(st)}">${st}</span></td>
     </tr>`;
   }).join("");
@@ -1223,7 +1242,7 @@ tampilkanSemua();
 window.pilihSpj = (id, ev) => {
   if (dragSudahGeser) return;
   if (window.getSelection && window.getSelection().toString()) return; // sedang memblok teks untuk copy
-  if (ev && ev.target.closest("button")) return;
+  if (ev && ev.target.closest("button, input")) return;
   if (ev && ev.shiftKey && jangkarSpj !== null) {
     const urutan = Array.from(document.querySelectorAll("#tbody tr[data-id]")).map(t => Number(t.dataset.id));
     const a = urutan.indexOf(jangkarSpj), b = urutan.indexOf(id);
@@ -1406,6 +1425,11 @@ async function aktifkanFolderTersimpan() {
 setFormEditable(false);
 setGupEditable(false);
 perbaruiBanner();
+// Ceklis dipindah ke tabel, jadi kotaknya dihapus dari formulir
+document.querySelectorAll("#form input[type=checkbox]").forEach(cb => {
+  if (CEKLIS.some(([n]) => n === cb.name)) cb.closest("label").remove();
+});
+
 aktifkanFolderTersimpan();
 </script>
 <div id="modalKonfirmasi" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;align-items:center;justify-content:center">
